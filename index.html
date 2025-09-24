@@ -7,7 +7,7 @@
   <style>
     body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial; padding: 20px; background: #f7f7f8; color: #111; }
     .center { text-align: center; }
-    .card { background: white; padding: 18px; border-radius: 8px; box-shadow: 0 6px 18px rgba(16,24,40,0.06); max-width: 900px; margin: 20px auto; }
+    .card { background: white; padding: 18px; border-radius: 8px; box-shadow: 0 6px 18px rgba(16,24,40,0.06); max-width: 1000px; margin: 20px auto; }
     input[type="password"] { padding: 8px 10px; font-size: 16px; border-radius: 6px; border: 1px solid #d0d7de; }
     button { padding: 8px 12px; font-size: 16px; border-radius: 6px; border: none; cursor: pointer; background:#2563eb; color:white; }
     button:disabled { opacity: 0.6; cursor: default; }
@@ -48,6 +48,7 @@
             <th>SMA50</th>
             <th>SMA100</th>
             <th>SMA200</th>
+            <th>SMA500</th>
           </tr>
         </thead>
         <tbody id="resultsBody"></tbody>
@@ -92,7 +93,7 @@
 
   async function getYahooTrend(symbol) {
     try {
-      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1y`;
+      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=2y`;
       const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
       const resp = await axios.get(proxyUrl);
 
@@ -103,20 +104,27 @@
       const SMA50 = calculateSMA(closes, 50);
       const SMA100 = calculateSMA(closes, 100);
       const SMA200 = calculateSMA(closes, 200);
+      const SMA500 = calculateSMA(closes, 500);
 
       const lastClose = closes[closes.length - 1];
       const lastSMA50 = SMA50[SMA50.length - 1];
       const lastSMA100 = SMA100[SMA100.length - 1];
       const lastSMA200 = SMA200[SMA200.length - 1];
+      const lastSMA500 = SMA500[SMA500.length - 1];
 
       let trend;
-      if (lastSMA50 && lastSMA100 && lastSMA200) {
-        if (lastSMA50 > lastSMA100 && lastSMA100 > lastSMA200 && lastClose > lastSMA50) trend = `Uptrend 📈 (${lastClose.toFixed(2)})`;
-        else if (lastSMA50 < lastSMA100 && lastSMA100 < lastSMA200 && lastClose < lastSMA50) trend = `Downtrend 📉 (${lastClose.toFixed(2)})`;
-        else trend = `Sideways ➡️ (${lastClose.toFixed(2)})`;
-      } else trend = `Insufficient data (${lastClose ? lastClose.toFixed(2) : "-"})`;
+      if (lastSMA50 && lastSMA100 && lastSMA200 && lastSMA500) {
+        if (lastSMA50 > lastSMA100 && lastSMA100 > lastSMA200 && lastSMA200 > lastSMA500 && lastClose > lastSMA50)
+          trend = `Uptrend 📈 (${lastClose.toFixed(2)})`;
+        else if (lastSMA50 < lastSMA100 && lastSMA100 < lastSMA200 && lastSMA200 < lastSMA500 && lastClose < lastSMA50)
+          trend = `Downtrend 📉 (${lastClose.toFixed(2)})`;
+        else
+          trend = `Sideways ➡️ (${lastClose.toFixed(2)})`;
+      } else {
+        trend = `Insufficient data (${lastClose ? lastClose.toFixed(2) : "-"})`;
+      }
 
-      return { symbol, trend, SMA50: lastSMA50, SMA100: lastSMA100, SMA200: lastSMA200 };
+      return { symbol, trend, SMA50: lastSMA50, SMA100: lastSMA100, SMA200: lastSMA200, SMA500: lastSMA500 };
     } catch (err) {
       console.error("Yahoo error", symbol, err);
       return { symbol, trend: "Error fetching data" };
@@ -146,20 +154,27 @@
       const SMA50 = calculateSMA(closes, 50);
       const SMA100 = calculateSMA(closes, 100);
       const SMA200 = calculateSMA(closes, 200);
+      const SMA500 = calculateSMA(closes, 500);
 
       const lastClose = closes[closes.length - 1];
       const lastSMA50 = SMA50[SMA50.length - 1];
       const lastSMA100 = SMA100[SMA100.length - 1];
       const lastSMA200 = SMA200[SMA200.length - 1];
+      const lastSMA500 = SMA500[SMA500.length - 1];
 
       let trend;
-      if (lastSMA50 != null && lastSMA100 != null && lastSMA200 != null) {
-        if (lastSMA50 > lastSMA100 && lastSMA100 > lastSMA200 && lastClose > lastSMA50) trend = `Uptrend 📈 (${lastClose.toFixed(2)})`;
-        else if (lastSMA50 < lastSMA100 && lastSMA100 < lastSMA200 && lastClose < lastSMA50) trend = `Downtrend 📉 (${lastClose.toFixed(2)})`;
-        else trend = `Sideways ➡️ (${lastClose.toFixed(2)})`;
-      } else trend = `Insufficient data (${lastClose ? lastClose.toFixed(2) : "-"})`;
+      if (lastSMA50 != null && lastSMA100 != null && lastSMA200 != null && lastSMA500 != null) {
+        if (lastSMA50 > lastSMA100 && lastSMA100 > lastSMA200 && lastSMA200 > lastSMA500 && lastClose > lastSMA50)
+          trend = `Uptrend 📈 (${lastClose.toFixed(2)})`;
+        else if (lastSMA50 < lastSMA100 && lastSMA100 < lastSMA200 && lastSMA200 < lastSMA500 && lastClose < lastSMA50)
+          trend = `Downtrend 📉 (${lastClose.toFixed(2)})`;
+        else
+          trend = `Sideways ➡️ (${lastClose.toFixed(2)})`;
+      } else {
+        trend = `Insufficient data (${lastClose ? lastClose.toFixed(2) : "-"})`;
+      }
 
-      return { symbol, trend, SMA50: lastSMA50, SMA100: lastSMA100, SMA200: lastSMA200 };
+      return { symbol, trend, SMA50: lastSMA50, SMA100: lastSMA100, SMA200: lastSMA200, SMA500: lastSMA500 };
     } catch (err) {
       console.error("Twelve Data error", symbol, err);
       return { symbol, trend: "Error fetching data" };
@@ -186,6 +201,7 @@
           <td>${r.SMA50 ? r.SMA50.toFixed(2) : "-"}</td>
           <td>${r.SMA100 ? r.SMA100.toFixed(2) : "-"}</td>
           <td>${r.SMA200 ? r.SMA200.toFixed(2) : "-"}</td>
+          <td>${r.SMA500 ? r.SMA500.toFixed(2) : "-"}</td>
         `;
         resultsBody.appendChild(tr);
       });
