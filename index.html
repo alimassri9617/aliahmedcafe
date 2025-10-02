@@ -45,10 +45,10 @@
           <tr>
             <th>Symbol</th>
             <th>Trend</th>
-            <!-- <th>SMA50</th>
+            <th>SMA50</th>
             <th>SMA100</th>
             <th>SMA200</th>
-            <th>SMA500</th> -->
+            <th>SMA500</th>
           </tr>
         </thead>
         <tbody id="resultsBody"></tbody>
@@ -56,10 +56,7 @@
     </div>
   </div>
 </div>
-          <!-- <td>${r.SMA50 ? r.SMA50.toFixed(2) : "-"}</td>
-           <td>${r.SMA100 ? r.SMA100.toFixed(2) : "-"}</td>
-           <td>${r.SMA200 ? r.SMA200.toFixed(2) : "-"}</td>
-           <td>${r.SMA500 ? r.SMA500.toFixed(2) : "-"}</td> -->
+        
 <script>
 (() => {
   const API_KEY = "b03b52a7e2e348b994a45de0b3f6ae09";
@@ -199,8 +196,21 @@
       rows.forEach(r => {
         const tr = document.createElement('tr');
         tr.innerHTML = `
+        ${if (r.symbole=="EUR/USD"){
           <td>${r.symbol}</td>
           <td>${r.trend}</td>
+          <td>${r.SMA50 ? r.SMA50.toFixed(5) : "-"}</td>
+          <td>${r.SMA100 ? r.SMA100.toFixed(5) : "-"}</td>
+          <td>${r.SMA200 ? r.SMA200.toFixed(5) : "-"}</td>
+          <td>${r.SMA500 ? r.SMA500.toFixed(5) : "-"}</td>
+          }
+        }
+          <td>${r.symbol}</td>
+          <td>${r.trend}</td>
+          <td>${r.SMA50 ? r.SMA50.toFixed(2) : "-"}</td>
+          <td>${r.SMA100 ? r.SMA100.toFixed(2) : "-"}</td>
+          <td>${r.SMA200 ? r.SMA200.toFixed(2) : "-"}</td>
+          <td>${r.SMA500 ? r.SMA500.toFixed(2) : "-"}</td>
         
         `;
         resultsBody.appendChild(tr);
@@ -241,6 +251,7 @@
 </script>
 </body>
 </html>
+
 
 
 
