@@ -115,11 +115,11 @@
       let trend;
       if (lastSMA50 && lastSMA100 && lastSMA200 && lastSMA500) {
         if (lastSMA50 > lastSMA100 && lastSMA100 > lastSMA200 && lastSMA200 > lastSMA500 && lastClose > lastSMA50)
-          trend = `Uptrend 📈 (${lastClose.toFixed(2)})`;
+          trend = `Uptrend 📈 (${lastClose.toFixed(6)})`;
         else if (lastSMA50 < lastSMA100 && lastSMA100 < lastSMA200 && lastSMA200 < lastSMA500 && lastClose < lastSMA50)
-          trend = `Downtrend 📉 (${lastClose.toFixed(2)})`;
+          trend = `Downtrend 📉 (${lastClose.toFixed(6)})`;
         else
-          trend = `Sideways ➡️ (${lastClose.toFixed(2)})`;
+          trend = `Sideways ➡️ (${lastClose.toFixed(6)})`;
       } else {
         trend = `Insufficient data (${lastClose ? lastClose.toFixed(2) : "-"})`;
       }
@@ -165,11 +165,11 @@
       let trend;
       if (lastSMA50 != null && lastSMA100 != null && lastSMA200 != null && lastSMA500 != null) {
         if (lastSMA50 > lastSMA100 && lastSMA100 > lastSMA200 && lastSMA200 > lastSMA500 && lastClose > lastSMA50)
-          trend = `Uptrend 📈 (${lastClose.toFixed(2)})`;
+          trend = `Uptrend 📈 (${lastClose.toFixed(6)})`;
         else if (lastSMA50 < lastSMA100 && lastSMA100 < lastSMA200 && lastSMA200 < lastSMA500 && lastClose < lastSMA50)
-          trend = `Downtrend 📉 (${lastClose.toFixed(2)})`;
+          trend = `Downtrend 📉 (${lastClose.toFixed(6)})`;
         else
-          trend = `Sideways ➡️ (${lastClose.toFixed(2)})`;
+          trend = `Sideways ➡️ (${lastClose.toFixed(6)})`;
       } else {
         trend = `Insufficient data (${lastClose ? lastClose.toFixed(2) : "-"})`;
       }
@@ -243,6 +243,7 @@
 </script>
 </body>
 </html>
+
 
 
 
