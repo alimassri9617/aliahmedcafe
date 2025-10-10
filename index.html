@@ -199,10 +199,10 @@
         
           <td>${r.symbol}</td>
           <td>${r.trend}</td>
-          <td>${r.SMA50 ? r.SMA50.toFixed(2) : "-"}</td>
-          <td>${r.SMA100 ? r.SMA100.toFixed(2) : "-"}</td>
-          <td>${r.SMA200 ? r.SMA200.toFixed(2) : "-"}</td>
-          <td>${r.SMA500 ? r.SMA500.toFixed(2) : "-"}</td>
+          <td>${r.SMA50 ? r.SMA50.toFixed(6) : "-"}</td>
+          <td>${r.SMA100 ? r.SMA100.toFixed(6) : "-"}</td>
+          <td>${r.SMA200 ? r.SMA200.toFixed(6) : "-"}</td>
+          <td>${r.SMA500 ? r.SMA500.toFixed(6) : "-"}</td>
         
         `;
         resultsBody.appendChild(tr);
@@ -243,6 +243,7 @@
 </script>
 </body>
 </html>
+
 
 
 
