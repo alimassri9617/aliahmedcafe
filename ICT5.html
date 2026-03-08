@@ -1,0 +1,278 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ICT Concepts Dashboard (5min) | LuxAlgo Inspired</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0b0f17; color: #e0e0e0; }
+        .card-bg { background: #1a1f2f; border: 1px solid #2a3042; }
+        .signal-long { background: #1e3a2e; color: #6fde9f; border-left: 4px solid #10b981; }
+        .signal-short { background: #3a2424; color: #fca5a5; border-left: 4px solid #ef4444; }
+        .signal-neutral { background: #2a2f3f; color: #9ca3af; border-left: 4px solid #6b7280; }
+        .badge { @apply px-2 py-1 text-xs font-semibold rounded; }
+    </style>
+</head>
+<body class="p-6 min-h-screen">
+    <div class="max-w-7xl mx-auto">
+        <!-- Header -->
+        <div class="mb-8 flex justify-between items-center">
+            <h1 class="text-3xl font-bold text-white">📊 ICT Market Pulse (5min)</h1>
+            <button id="refreshBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">
+                ⟳ Refresh Data
+            </button>
+        </div>
+
+        <!-- Description -->
+        <div class="card-bg p-4 rounded-lg mb-8 text-sm text-gray-300">
+            <p><span class="font-semibold text-indigo-400">Simplified ICT Concepts (5min candles)</span> — Based on LuxAlgo's indicator logic: Market Structure Shift (MSS), Fair Value Gaps (FVG), and Order Blocks (OB). Each card shows current price and a signal (Long/Short/Neutral) derived from real-time 5‑minute data via Twelve Data. <span class="text-yellow-400">⚠️ This is a demonstration, not financial advice.</span></p>
+        </div>
+
+        <!-- Grid of pairs -->
+        <div id="pairsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+            <!-- Cards injected by JavaScript -->
+        </div>
+
+        <!-- Footer note -->
+        <div class="mt-8 text-center text-xs text-gray-600">
+            Data updates on load/refresh. API Key: b03b52a7e2e348b994a45de0b3f6ae09 · Symbols: XAU/USD, EUR/USD, GBP/USD, USD/JPY, BTC/USD, GBP/JPY, AUD/USD, NZD/USD · Interval: 5min
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            // Configuration
+            const API_KEY = "b03b52a7e2e348b994a45de0b3f6ae09";
+            const SYMBOLS = ["XAU/USD", "EUR/USD", "GBP/USD", "USD/JPY", "BTC/USD", "GBP/JPY", "AUD/USD", "NZD/USD"];
+            const INTERVAL = "5min";   // 5-minute candles
+            const OUTPUT_SIZE = 200;    // number of candles (covers ~16.6 hours)
+
+            // DOM elements
+            const grid = document.getElementById('pairsGrid');
+            const refreshBtn = document.getElementById('refreshBtn');
+
+            // State
+            let loading = false;
+
+            // Utility: format price
+            function formatPrice(symbol, price) {
+                if (!price && price !== 0) return '—';
+                if (symbol.includes('JPY')) return price.toFixed(3);
+                if (symbol.includes('XAU')) return price.toFixed(2);
+                if (symbol.includes('BTC')) return price.toFixed(1);
+                return price.toFixed(5);
+            }
+
+            // --- Core ICT analysis (simplified) ---
+            function analyzeICT(ohlc) {
+                const highs = ohlc.map(d => d.high);
+                const lows = ohlc.map(d => d.low);
+                const closes = ohlc.map(d => d.close);
+                const opens = ohlc.map(d => d.open);
+                const len = ohlc.length;
+
+                // 1. Find swing highs/lows (pivot left/right = 2)
+                const swingHighs = [];
+                const swingLows = [];
+                for (let i = 2; i < len - 2; i++) {
+                    if (highs[i] > highs[i-1] && highs[i] > highs[i-2] && highs[i] > highs[i+1] && highs[i] > highs[i+2]) {
+                        swingHighs.push({ index: i, price: highs[i] });
+                    }
+                    if (lows[i] < lows[i-1] && lows[i] < lows[i-2] && lows[i] < lows[i+1] && lows[i] < lows[i+2]) {
+                        swingLows.push({ index: i, price: lows[i] });
+                    }
+                }
+
+                // 2. Market structure (last two swings)
+                let trend = 'neutral';
+                if (swingHighs.length >= 2 && swingLows.length >= 2) {
+                    const lastSH = swingHighs[swingHighs.length-1];
+                    const prevSH = swingHighs[swingHighs.length-2];
+                    const lastSL = swingLows[swingLows.length-1];
+                    const prevSL = swingLows[swingLows.length-2];
+
+                    const higherHigh = lastSH.price > prevSH.price;
+                    const higherLow = lastSL.price > prevSL.price;
+                    const lowerHigh = lastSH.price < prevSH.price;
+                    const lowerLow = lastSL.price < prevSL.price;
+
+                    if (higherHigh && higherLow) trend = 'uptrend';
+                    else if (lowerHigh && lowerLow) trend = 'downtrend';
+                }
+
+                // 3. Fair Value Gaps (FVG)
+                let bullishFVG = null;
+                let bearishFVG = null;
+                for (let i = 1; i < len - 1; i++) {
+                    if (lows[i+1] > highs[i-1]) {
+                        bullishFVG = { index: i, top: lows[i+1], bottom: highs[i-1] };
+                    }
+                    if (highs[i+1] < lows[i-1]) {
+                        bearishFVG = { index: i, top: lows[i-1], bottom: highs[i+1] };
+                    }
+                }
+
+                // 4. Simple Order Block detection
+                let orderBlock = null;
+                if (swingLows.length > 0) {
+                    const lastSwingLow = swingLows[swingLows.length-1];
+                    const swingHighAfter = swingHighs.find(sh => sh.index > lastSwingLow.index);
+                    if (swingHighAfter && closes[swingHighAfter.index] > swingHighAfter.price) {
+                        orderBlock = { type: 'bullish', price: lastSwingLow.price, index: lastSwingLow.index };
+                    }
+                }
+                if (!orderBlock && swingHighs.length > 0) {
+                    const lastSwingHigh = swingHighs[swingHighs.length-1];
+                    const swingLowAfter = swingLows.find(sl => sl.index > lastSwingHigh.index);
+                    if (swingLowAfter && closes[swingLowAfter.index] < swingLowAfter.price) {
+                        orderBlock = { type: 'bearish', price: lastSwingHigh.price, index: lastSwingHigh.index };
+                    }
+                }
+
+                // 5. Signal logic
+                let signal = 'neutral';
+                let reason = [];
+
+                if (trend === 'uptrend' && bullishFVG) {
+                    signal = 'long';
+                    reason.push('bullish MSS + FVG');
+                } else if (trend === 'downtrend' && bearishFVG) {
+                    signal = 'short';
+                    reason.push('bearish MSS + FVG');
+                } else if (trend === 'uptrend' && orderBlock?.type === 'bullish') {
+                    signal = 'long';
+                    reason.push('bullish MSS + OB');
+                } else if (trend === 'downtrend' && orderBlock?.type === 'bearish') {
+                    signal = 'short';
+                    reason.push('bearish MSS + OB');
+                } else {
+                    if (trend === 'uptrend') { signal = 'long'; reason.push('uptrend (no FVG)'); }
+                    else if (trend === 'downtrend') { signal = 'short'; reason.push('downtrend (no FVG)'); }
+                    else { reason.push('no clear structure'); }
+                }
+
+                return {
+                    trend,
+                    signal,
+                    reason: reason.join(', ') || 'neutral',
+                    lastPrice: closes[len-1],
+                    bullishFVG: bullishFVG ? `🟢 FVG` : null,
+                    bearishFVG: bearishFVG ? `🔴 FVG` : null,
+                    orderBlock: orderBlock ? `${orderBlock.type === 'bullish' ? '🟢' : '🔴'} OB @ ${formatPrice('', orderBlock.price)}` : null,
+                    swingHighs: swingHighs.slice(-2),
+                    swingLows: swingLows.slice(-2)
+                };
+            }
+
+            // Fetch data for a single symbol
+            async function fetchSymbolData(symbol) {
+                const url = `https://api.twelvedata.com/time_series?symbol=${symbol}&interval=${INTERVAL}&outputsize=${OUTPUT_SIZE}&apikey=${API_KEY}`;
+                try {
+                    const response = await fetch(url);
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    const data = await response.json();
+                    if (data.status === 'error') throw new Error(data.message);
+                    if (!data.values || data.values.length === 0) throw new Error('No data');
+                    
+                    const candles = data.values.map(v => ({
+                        open: parseFloat(v.open),
+                        high: parseFloat(v.high),
+                        low: parseFloat(v.low),
+                        close: parseFloat(v.close),
+                        datetime: v.datetime
+                    })).reverse();
+                    return { symbol, candles };
+                } catch (error) {
+                    console.error(`Error fetching ${symbol}:`, error);
+                    return { symbol, error: error.message };
+                }
+            }
+
+            // Update grid with all symbols
+            async function loadAllData() {
+                if (loading) return;
+                loading = true;
+                refreshBtn.textContent = '⏳ Loading...';
+                refreshBtn.disabled = true;
+
+                // Show skeleton cards
+                grid.innerHTML = SYMBOLS.map(s => `
+                    <div class="card-bg rounded-xl p-5 animate-pulse">
+                        <div class="h-6 bg-gray-700 rounded w-24 mb-4"></div>
+                        <div class="h-8 bg-gray-700 rounded w-32 mb-3"></div>
+                        <div class="h-4 bg-gray-700 rounded w-full mb-2"></div>
+                        <div class="h-4 bg-gray-700 rounded w-3/4"></div>
+                    </div>
+                `).join('');
+
+                const results = [];
+                for (const symbol of SYMBOLS) {
+                    const res = await fetchSymbolData(symbol);
+                    results.push(res);
+                    await new Promise(r => setTimeout(r, 300));
+                }
+
+                grid.innerHTML = '';
+                results.forEach(item => {
+                    if (item.error || !item.candles) {
+                        grid.innerHTML += `
+                            <div class="card-bg rounded-xl p-5 border border-red-800">
+                                <div class="flex justify-between items-start">
+                                    <h2 class="text-xl font-semibold text-gray-200">${item.symbol}</h2>
+                                    <span class="badge bg-red-900 text-red-200">Error</span>
+                                </div>
+                                <p class="text-sm text-red-400 mt-2">${item.error || 'Unknown error'}</p>
+                            </div>
+                        `;
+                        return;
+                    }
+
+                    const analysis = analyzeICT(item.candles);
+                    const lastCandle = item.candles[item.candles.length-1];
+                    const price = lastCandle.close;
+                    const signalClass = analysis.signal === 'long' ? 'signal-long' : (analysis.signal === 'short' ? 'signal-short' : 'signal-neutral');
+
+                    grid.innerHTML += `
+                        <div class="card-bg rounded-xl p-5 ${signalClass} transition-all hover:scale-[1.02]">
+                            <div class="flex justify-between items-start">
+                                <h2 class="text-xl font-bold text-white">${item.symbol}</h2>
+                                <span class="badge ${analysis.signal === 'long' ? 'bg-green-900 text-green-300' : (analysis.signal === 'short' ? 'bg-red-900 text-red-300' : 'bg-gray-700 text-gray-300')}">
+                                    ${analysis.signal.toUpperCase()}
+                                </span>
+                            </div>
+                            <div class="mt-2 text-3xl font-mono font-light text-white">${formatPrice(item.symbol, price)}</div>
+                            <div class="mt-3 text-sm space-y-1 text-gray-300">
+                                <p><span class="text-indigo-400">Trend:</span> ${analysis.trend}</p>
+                                <p><span class="text-indigo-400">Reason:</span> ${analysis.reason}</p>
+                                ${analysis.bullishFVG ? `<p><span class="text-green-400">🟢 Bullish FVG</span></p>` : ''}
+                                ${analysis.bearishFVG ? `<p><span class="text-red-400">🔴 Bearish FVG</span></p>` : ''}
+                                ${analysis.orderBlock ? `<p><span class="text-yellow-400">${analysis.orderBlock}</span></p>` : ''}
+                            </div>
+                            <div class="mt-3 text-[10px] text-gray-600 flex justify-between">
+                                <span>Swing highs: ${analysis.swingHighs.map(h => h.price.toFixed(2)).join(', ') || '—'}</span>
+                                <span>Swing lows: ${analysis.swingLows.map(l => l.price.toFixed(2)).join(', ') || '—'}</span>
+                            </div>
+                            <div class="mt-2 text-[10px] text-gray-600 border-t border-gray-700 pt-2">
+                                Last candle: ${lastCandle.datetime} (${INTERVAL})
+                            </div>
+                        </div>
+                    `;
+                });
+
+                refreshBtn.textContent = '⟳ Refresh Data';
+                refreshBtn.disabled = false;
+                loading = false;
+            }
+
+            // Initial load
+            loadAllData();
+
+            // Refresh button
+            refreshBtn.addEventListener('click', loadAllData);
+        })();
+    </script>
+</body>
+</html>
