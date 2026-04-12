@@ -1,378 +1,787 @@
-<!doctype html>
+
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>Market Trends + AI Trading Signals (with SMAs)</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Trading Signals Dashboard</title>
   <style>
-    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial; padding: 20px; background: #f7f7f8; color: #111; }
-    .center { text-align: center; }
-    .card { background: white; padding: 18px; border-radius: 8px; box-shadow: 0 6px 18px rgba(16,24,40,0.06); max-width: 1400px; margin: 20px auto; overflow-x: auto; }
-    input[type="password"] { padding: 8px 10px; font-size: 16px; border-radius: 6px; border: 1px solid #d0d7de; }
-    button { padding: 8px 12px; font-size: 16px; border-radius: 6px; border: none; cursor: pointer; background:#2563eb; color:white; }
-    button:disabled { opacity: 0.6; cursor: default; }
-    table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13px; }
-    th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid #e6e6e9; }
-    th { background: #fafafa; font-weight: 600; position: sticky; top: 0; }
-    .muted { color: #666; font-size: 14px; }
-    .loading { display: inline-block; margin-left:8px; }
-    .signal-long { color: #16a34a; font-weight: bold; }
-    .signal-short { color: #dc2626; font-weight: bold; }
-    .signal-neutral { color: #6b7280; }
-    .sma-cell { font-family: monospace; font-size: 12px; }
-    .status-bar { margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
-    .refresh-btn { background: #2563eb; }
-    .refresh-btn:active { transform: scale(0.98); }
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    /* Login Card */
+    .login-card {
+      background: white;
+      border-radius: 20px;
+      padding: 40px;
+      max-width: 400px;
+      margin: 100px auto;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      text-align: center;
+    }
+
+    .login-card h2 {
+      color: #333;
+      margin-bottom: 10px;
+    }
+
+    .login-card .subtitle {
+      color: #666;
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+
+    .password-input {
+      width: 100%;
+      padding: 12px;
+      font-size: 16px;
+      border: 2px solid #e0e0e0;
+      border-radius: 10px;
+      margin-bottom: 15px;
+      transition: border-color 0.3s;
+    }
+
+    .password-input:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+
+    .unlock-btn {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      padding: 12px 30px;
+      font-size: 16px;
+      border-radius: 10px;
+      cursor: pointer;
+      width: 100%;
+      transition: transform 0.2s;
+    }
+
+    .unlock-btn:hover {
+      transform: translateY(-2px);
+    }
+
+    /* Main Dashboard */
+    .dashboard {
+      background: white;
+      border-radius: 20px;
+      padding: 30px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 30px;
+      flex-wrap: wrap;
+      gap: 15px;
+    }
+
+    .header h1 {
+      color: #333;
+      font-size: 28px;
+    }
+
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+
+    .status-text {
+      color: #666;
+      font-size: 14px;
+      padding: 8px 15px;
+      background: #f5f5f5;
+      border-radius: 20px;
+    }
+
+    .refresh-btn {
+      background: #667eea;
+      color: white;
+      border: none;
+      padding: 8px 20px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.3s;
+    }
+
+    .refresh-btn:hover:not(:disabled) {
+      background: #5a67d8;
+      transform: translateY(-1px);
+    }
+
+    .refresh-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* Loading Spinner */
+    .loading-overlay {
+      text-align: center;
+      padding: 40px;
+    }
+
+    .spinner {
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #667eea;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 15px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    /* Table Styles */
+    .table-wrapper {
+      overflow-x: auto;
+      border-radius: 12px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th {
+      background: #f8f9fa;
+      padding: 15px 12px;
+      text-align: left;
+      font-weight: 600;
+      color: #495057;
+      border-bottom: 2px solid #dee2e6;
+      font-size: 14px;
+    }
+
+    td {
+      padding: 15px 12px;
+      border-bottom: 1px solid #e9ecef;
+      font-size: 14px;
+    }
+
+    tr:hover {
+      background: #f8f9fa;
+    }
+
+    .symbol {
+      font-weight: 700;
+      color: #333;
+      font-size: 16px;
+    }
+
+    .price {
+      font-weight: 600;
+      color: #28a745;
+    }
+
+    .sma-value {
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      color: #666;
+    }
+
+    /* Signal Badges */
+    .signal-long {
+      display: inline-block;
+      padding: 6px 12px;
+      background: linear-gradient(135deg, #28a745, #20c997);
+      color: white;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 14px;
+      text-align: center;
+      min-width: 100px;
+    }
+
+    .signal-short {
+      display: inline-block;
+      padding: 6px 12px;
+      background: linear-gradient(135deg, #dc3545, #e83e8c);
+      color: white;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 14px;
+      text-align: center;
+      min-width: 100px;
+    }
+
+    .signal-neutral {
+      display: inline-block;
+      padding: 6px 12px;
+      background: #6c757d;
+      color: white;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 14px;
+      text-align: center;
+      min-width: 100px;
+    }
+
+    .signal-error {
+      display: inline-block;
+      padding: 6px 12px;
+      background: #ffc107;
+      color: #333;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 12px;
+    }
+
+    .sl-tp {
+      font-size: 11px;
+      margin-top: 5px;
+      color: rgba(255,255,255,0.9);
+    }
+
+    /* Trend Indicators */
+    .trend-up { color: #28a745; }
+    .trend-down { color: #dc3545; }
+    .trend-side { color: #6c757d; }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .dashboard {
+        padding: 20px;
+      }
+      
+      th, td {
+        padding: 10px 8px;
+        font-size: 12px;
+      }
+      
+      .signal-long, .signal-short, .signal-neutral {
+        min-width: 80px;
+        font-size: 12px;
+        padding: 4px 8px;
+      }
+      
+      .header h1 {
+        font-size: 20px;
+      }
+    }
+
+    /* Progress Bar */
+    .progress-container {
+      margin: 20px 0;
+      background: #f0f0f0;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .progress-bar {
+      background: linear-gradient(90deg, #667eea, #764ba2);
+      height: 30px;
+      line-height: 30px;
+      color: white;
+      text-align: center;
+      font-size: 12px;
+      transition: width 0.3s;
+      white-space: nowrap;
+    }
+
+    .stats {
+      display: flex;
+      gap: 15px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .stat-card {
+      background: #f8f9fa;
+      padding: 10px 20px;
+      border-radius: 10px;
+      font-size: 14px;
+    }
+
+    .stat-card strong {
+      color: #667eea;
+    }
   </style>
-  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/crypto-js@4.1.1/crypto-js.min.js"></script>
 </head>
 <body>
-<div id="app" class="card">
-  <div id="loginView" class="center">
-    <h2>🔒 Enter Password</h2>
-    <div>
-      <input id="passwordInput" type="password" placeholder="Password" />
-      <button id="unlockBtn">Unlock</button>
+  <div class="container">
+    <!-- Login View -->
+    <div id="loginView" class="login-card">
+      <h2>🔒 Trading Dashboard</h2>
+      <div class="subtitle">Enter password to access AI trading signals</div>
+      <input type="password" id="passwordInput" class="password-input" placeholder="Password" />
+      <button id="unlockBtn" class="unlock-btn">Unlock Dashboard</button>
     </div>
-    <p class="muted">Access market data + AI trading signals (Node.js backend with SMA support)</p>
+
+    <!-- Main Dashboard -->
+    <div id="mainView" style="display: none;">
+      <div class="dashboard">
+        <div class="header">
+          <h1>📊 AI Trading Signals Dashboard</h1>
+          <div class="status-bar">
+            <span id="statusText" class="status-text">Ready</span>
+            <button id="refreshBtn" class="refresh-btn">🔄 Refresh Data</button>
+          </div>
+        </div>
+
+        <div id="statsContainer" style="display: none;">
+          <div class="stats">
+            <div class="stat-card">📈 <strong id="longCount">0</strong> LONG Signals</div>
+            <div class="stat-card">📉 <strong id="shortCount">0</strong> SHORT Signals</div>
+            <div class="stat-card">⚪ <strong id="neutralCount">0</strong> NEUTRAL</div>
+            <div class="stat-card">✅ <strong id="totalCount">0</strong> Total Assets</div>
+          </div>
+        </div>
+
+        <div id="progressContainer" class="progress-container" style="display: none;">
+          <div id="progressBar" class="progress-bar" style="width: 0%">0%</div>
+        </div>
+
+        <div class="table-wrapper">
+          <div id="loadingSpinner" class="loading-overlay" style="display: none;">
+            <div class="spinner"></div>
+            <div>Loading market data & AI signals...</div>
+          </div>
+          <table id="dataTable" style="display: none;">
+            <thead>
+              <tr>
+                <th>Symbol</th>
+                <th>Price & Trend</th>
+                <th>SMA 50</th>
+                <th>SMA 100</th>
+                <th>SMA 200</th>
+                <th>SMA 500</th>
+                <th>AI Signal</th>
+              </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   </div>
 
-  <div id="mainView" style="display:none;">
-    <h2>📊 Market Trends + AI Signals (with SMAs)</h2>
-    <div class="status-bar">
-      <span id="statusText" class="muted">Idle</span>
-      <button id="refreshBtn" class="refresh-btn">⟳ Refresh All</button>
-    </div>
-
-    <div id="tableContainer">
-      <div id="loadingBlock" style="display:none;" class="muted">Loading data<span class="loading">⏳</span></div>
-      <table id="resultsTable" style="display:none;">
-        <thead>
-          <tr>
-            <th>Symbol</th>
-            <th>Price & Trend</th>
-            <th>SMA50</th>
-            <th>SMA100</th>
-            <th>SMA200</th>
-            <th>SMA500</th>
-            <th>🤖 AI Signal (LONG/SHORT)</th>
-          </tr>
-        </thead>
-        <tbody id="resultsBody"></tbody>
-      </table>
-    </div>
-  </div>
-</div>
-
-<script>
-(() => {
-  // ---------- CONFIGURATION ----------
-  const API_KEY = "b03b52a7e2e348b994a45de0b3f6ae09";
-  const encryptionKey = "secretKey";
-  const encryptedPassword = CryptoJS.AES.encrypt("4444", encryptionKey).toString();
-  const AI_SERVER_URL = "http://155.133.26.150:5000/predict";   // your Node.js backend
-
-  // Symbol lists
-  const yahooSymbols = ["^DJI", "^NDX"];
-  const twelveSymbols = ["XAU/USD", "EUR/USD", "GBP/USD", "USD/JPY", "BTC/USD", "GBP/JPY","AUD/USD", "NZD/USD"];
-
-  // DOM elements
-  const loginView = document.getElementById('loginView');
-  const mainView = document.getElementById('mainView');
-  const passwordInput = document.getElementById('passwordInput');
-  const unlockBtn = document.getElementById('unlockBtn');
-  const statusText = document.getElementById('statusText');
-  const refreshBtn = document.getElementById('refreshBtn');
-  const loadingBlock = document.getElementById('loadingBlock');
-  const resultsTable = document.getElementById('resultsTable');
-  const resultsBody = document.getElementById('resultsBody');
-
-  let authorized = false;
-
-  // ---------- TECHNICAL INDICATORS ----------
-  function calculateRSI(prices, period = 14) {
-    if (prices.length < period + 1) return null;
-    let gains = 0, losses = 0;
-    for (let i = 1; i <= period; i++) {
-      const diff = prices[i] - prices[i-1];
-      if (diff >= 0) gains += diff;
-      else losses -= diff;
-    }
-    let avgGain = gains / period;
-    let avgLoss = losses / period;
-    let rsi = 100 - (100 / (1 + avgGain / avgLoss));
-    for (let i = period + 1; i < prices.length; i++) {
-      const diff = prices[i] - prices[i-1];
-      let gain = diff > 0 ? diff : 0;
-      let loss = diff < 0 ? -diff : 0;
-      avgGain = (avgGain * (period - 1) + gain) / period;
-      avgLoss = (avgLoss * (period - 1) + loss) / period;
-      if (avgLoss === 0) rsi = 100;
-      else rsi = 100 - (100 / (1 + avgGain / avgLoss));
-    }
-    return rsi;
-  }
-
-  function calculateEMA(prices, period) {
-    const k = 2 / (period + 1);
-    const ema = [prices[0]];
-    for (let i = 1; i < prices.length; i++) {
-      ema.push(prices[i] * k + ema[i-1] * (1 - k));
-    }
-    return ema;
-  }
-
-  function calculateMACD(prices, fast=12, slow=26, signal=9) {
-    if (prices.length < slow) return { macd: null, signalLine: null };
-    const emaFast = calculateEMA(prices, fast);
-    const emaSlow = calculateEMA(prices, slow);
-    const macdLine = emaFast.map((v, i) => v - emaSlow[i]);
-    const signalLine = calculateEMA(macdLine, signal);
-    return {
-      macd: macdLine[macdLine.length-1],
-      signalLine: signalLine[signalLine.length-1]
-    };
-  }
-
-  function calculateSMA(prices, period) {
-    const res = new Array(prices.length).fill(null);
-    for (let i = 0; i < prices.length; i++) {
-      if (i < period - 1) continue;
-      let sum = 0;
-      for (let j = i - period + 1; j <= i; j++) sum += prices[j];
-      res[i] = sum / period;
-    }
-    return res;
-  }
-
-  // ---------- FETCH FROM YAHOO (with all indicators) ----------
-  async function getYahooData(symbol) {
-    try {
-      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=5m&range=8d`;
-      const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-      const resp = await axios.get(proxyUrl);
-      const data = resp.data.chart.result?.[0];
-      if (!data) return null;
-      const closes = data.indicators.quote[0].close.filter(v => v !== null);
-      const volumes = data.indicators.quote[0].volume.filter(v => v !== null);
-      if (closes.length < 100) return null;
-      const currentPrice = closes[closes.length-1];
-      const rsi = calculateRSI(closes, 14);
-      const { macd, signalLine } = calculateMACD(closes, 12, 26, 9);
-      const volume = volumes[volumes.length-1] || 0;
-
-      // SMAs
-      const sma50arr = calculateSMA(closes, 50);
-      const sma100arr = calculateSMA(closes, 100);
-      const sma200arr = calculateSMA(closes, 200);
-      const sma500arr = calculateSMA(closes, 500);
-      const lastSMA50 = sma50arr[sma50arr.length-1];
-      const lastSMA100 = sma100arr[sma100arr.length-1];
-      const lastSMA200 = sma200arr[sma200arr.length-1];
-      const lastSMA500 = sma500arr[sma500arr.length-1];
-
-      // Simple trend text
-      let trendText = `${currentPrice.toFixed(2)} `;
-      if (lastSMA50 && lastSMA100 && lastSMA200 && lastSMA500) {
-        if (lastSMA50 > lastSMA100 && lastSMA100 > lastSMA200 && lastSMA200 > lastSMA500 && currentPrice > lastSMA50)
-          trendText += "📈 Uptrend";
-        else if (lastSMA50 < lastSMA100 && lastSMA100 < lastSMA200 && lastSMA200 < lastSMA500 && currentPrice < lastSMA50)
-          trendText += "📉 Downtrend";
-        else trendText += "➡️ Sideways";
-      } else trendText += "(insufficient data)";
-
-      return {
-        symbol,
-        currentPrice,
-        rsi,
-        macd,
-        signalLine,
-        volume,
-        sma50: lastSMA50,
-        sma100: lastSMA100,
-        sma200: lastSMA200,
-        sma500: lastSMA500,
-        trendText
-      };
-    } catch (err) {
-      console.error("Yahoo error", symbol, err);
-      return null;
-    }
-  }
-
-  // ---------- FETCH FROM TWELVE DATA (with all indicators) ----------
-  async function getTwelveData(symbol) {
-    try {
-      const url = "https://api.twelvedata.com/time_series";
-      const resp = await axios.get(url, {
-        params: {
-          symbol,
-          interval: "5min",
-          outputsize: 500,
-          apikey: API_KEY,
-        },
-      });
-      const data = resp.data;
-      if (!data.values) return null;
-      const values = data.values
-        .map(v => ({ datetime: new Date(v.datetime), close: parseFloat(v.close), volume: parseFloat(v.volume) || 0 }))
-        .sort((a, b) => a.datetime - b.datetime);
-      const closes = values.map(v => v.close);
-      const volumes = values.map(v => v.volume);
-      if (closes.length < 100) return null;
-      const currentPrice = closes[closes.length-1];
-      const rsi = calculateRSI(closes, 14);
-      const { macd, signalLine } = calculateMACD(closes, 12, 26, 9);
-      const volume = volumes[volumes.length-1] || 0;
-
-      const sma50arr = calculateSMA(closes, 50);
-      const sma100arr = calculateSMA(closes, 100);
-      const sma200arr = calculateSMA(closes, 200);
-      const sma500arr = calculateSMA(closes, 500);
-      const lastSMA50 = sma50arr[sma50arr.length-1];
-      const lastSMA100 = sma100arr[sma100arr.length-1];
-      const lastSMA200 = sma200arr[sma200arr.length-1];
-      const lastSMA500 = sma500arr[sma500arr.length-1];
-
-      let trendText = `${currentPrice.toFixed(2)} `;
-      if (lastSMA50 && lastSMA100 && lastSMA200 && lastSMA500) {
-        if (lastSMA50 > lastSMA100 && lastSMA100 > lastSMA200 && lastSMA200 > lastSMA500 && currentPrice > lastSMA50)
-          trendText += "📈 Uptrend";
-        else if (lastSMA50 < lastSMA100 && lastSMA100 < lastSMA200 && lastSMA200 < lastSMA500 && currentPrice < lastSMA50)
-          trendText += "📉 Downtrend";
-        else trendText += "➡️ Sideways";
-      } else trendText += "(insufficient data)";
-
-      return {
-        symbol,
-        currentPrice,
-        rsi,
-        macd,
-        signalLine,
-        volume,
-        sma50: lastSMA50,
-        sma100: lastSMA100,
-        sma200: lastSMA200,
-        sma500: lastSMA500,
-        trendText
-      };
-    } catch (err) {
-      console.error("Twelve Data error", symbol, err);
-      return null;
-    }
-  }
-
-  // ---------- CALL NODE.JS BACKEND (with SMAs) ----------
-  async function getAISignal(symbol, currentPrice, rsi, macd, signalLine, volume, sma50, sma100, sma200, sma500) {
-    if (!rsi || !macd || !signalLine) return { direction: "N/A", sl: null, tp: null, error: "Missing indicators" };
-    try {
-      const payload = {
-        symbol,
-        current_price: currentPrice,
-        rsi: parseFloat(rsi),
-        macd: parseFloat(macd),
-        signal_line: parseFloat(signalLine),
-        volume: volume || 1000,
-        sma50: sma50 || null,
-        sma100: sma100 || null,
-        sma200: sma200 || null,
-        sma500: sma500 || null
-      };
-      const response = await axios.post(AI_SERVER_URL, payload, { timeout: 15000 });
-      return {
-        direction: response.data.direction,
-        sl: response.data.stop_loss,
-        tp: response.data.take_profit,
-        raw: response.data.raw_llm_output
-      };
-    } catch (err) {
-      console.error("AI server error", symbol, err.message);
-      return { direction: "Error", sl: null, tp: null, error: err.message };
-    }
-  }
-
-  // ---------- RENDER TABLE (fetch data + AI signals sequentially to show progress) ----------
-  async function fetchDataAndRender() {
-    try {
-      statusText.innerText = "Fetching market data...";
-      loadingBlock.style.display = '';
-      resultsTable.style.display = 'none';
-      resultsBody.innerHTML = '';
-
-      // Get all symbols data
-      const yahooPromises = yahooSymbols.map(s => getYahooData(s));
-      const twelvePromises = twelveSymbols.map(s => getTwelveData(s));
-      let allData = await Promise.all([...yahooPromises, ...twelvePromises]);
-      allData = allData.filter(d => d !== null);
-
-      statusText.innerText = "Getting AI signals (may take a while)...";
-      // Process each symbol: call AI server and add row incrementally
-      for (let i = 0; i < allData.length; i++) {
-        const d = allData[i];
-        const signal = await getAISignal(
-          d.symbol, d.currentPrice, d.rsi, d.macd, d.signalLine, d.volume,
-          d.sma50, d.sma100, d.sma200, d.sma500
-        );
-        d.aiSignal = signal;
-
-        // Build row
-        const tr = document.createElement('tr');
-        let signalHtml = '';
-        if (signal.direction === 'LONG') {
-          signalHtml = `<span class="signal-long">🔵 LONG<br><span style="font-size:11px;">SL: ${signal.sl?.toFixed(2)}<br>TP: ${signal.tp?.toFixed(2)}</span></span>`;
-        } else if (signal.direction === 'SHORT') {
-          signalHtml = `<span class="signal-short">🔴 SHORT<br><span style="font-size:11px;">SL: ${signal.sl?.toFixed(2)}<br>TP: ${signal.tp?.toFixed(2)}</span></span>`;
-        } else if (signal.direction === 'NEUTRAL') {
-          signalHtml = `<span class="signal-neutral">⚪ NEUTRAL</span>`;
-        } else {
-          signalHtml = `<span class="muted">${signal.direction}</span>`;
-        }
-
-        tr.innerHTML = `
-          <td><strong>${d.symbol}</strong></td>
-          <td>${d.trendText}</td>
-          <td class="sma-cell">${d.sma50 ? d.sma50.toFixed(4) : "-"}</td>
-          <td class="sma-cell">${d.sma100 ? d.sma100.toFixed(4) : "-"}</td>
-          <td class="sma-cell">${d.sma200 ? d.sma200.toFixed(4) : "-"}</td>
-          <td class="sma-cell">${d.sma500 ? d.sma500.toFixed(4) : "-"}</td>
-          <td>${signalHtml}</td>
-        `;
-        resultsBody.appendChild(tr);
-        // Update status
-        statusText.innerText = `AI signal for ${d.symbol} done (${i+1}/${allData.length})`;
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/crypto-js@4.1.1/crypto-js.min.js"></script>
+  
+  <script>
+    // Configuration
+    const API_KEY = "b03b52a7e2e348b994a45de0b3f6ae09";
+    const ENCRYPTION_KEY = "secretKey";
+    const PASSWORD = "4444";
+    const AI_SERVER_URL = "http://155.133.26.150:5000/predict";  // Change to http://localhost:5000/predict if needed
+    
+    // Symbol lists
+    const YAHOO_SYMBOLS = ["^DJI", "^NDX"];
+    const TWELVE_SYMBOLS = ["XAU/USD", "EUR/USD", "GBP/USD", "USD/JPY", "BTC/USD", "GBP/JPY", "AUD/USD", "NZD/USD"];
+    
+    // Encrypt password
+    const encryptedPassword = CryptoJS.AES.encrypt(PASSWORD, ENCRYPTION_KEY).toString();
+    
+    // DOM elements
+    const loginView = document.getElementById('loginView');
+    const mainView = document.getElementById('mainView');
+    const passwordInput = document.getElementById('passwordInput');
+    const unlockBtn = document.getElementById('unlockBtn');
+    const refreshBtn = document.getElementById('refreshBtn');
+    const statusText = document.getElementById('statusText');
+    const loadingSpinner = document.getElementById('loadingSpinner');
+    const dataTable = document.getElementById('dataTable');
+    const tableBody = document.getElementById('tableBody');
+    const progressContainer = document.getElementById('progressContainer');
+    const progressBar = document.getElementById('progressBar');
+    const statsContainer = document.getElementById('statsContainer');
+    
+    let isAuthorized = false;
+    let currentData = [];
+    
+    // Technical Indicators
+    function calculateRSI(prices, period = 14) {
+      if (prices.length < period + 1) return null;
+      let gains = 0, losses = 0;
+      for (let i = 1; i <= period; i++) {
+        const diff = prices[i] - prices[i-1];
+        if (diff >= 0) gains += diff;
+        else losses -= diff;
       }
-
-      resultsTable.style.display = '';
-      statusText.innerText = "Updated: " + new Date().toLocaleString();
-    } catch (err) {
-      statusText.innerText = "Error";
-      console.error(err);
-      alert("Error fetching data. See console for details.");
-    } finally {
-      loadingBlock.style.display = 'none';
+      let avgGain = gains / period;
+      let avgLoss = losses / period;
+      let rsi = 100 - (100 / (1 + avgGain / avgLoss));
+      for (let i = period + 1; i < prices.length; i++) {
+        const diff = prices[i] - prices[i-1];
+        let gain = diff > 0 ? diff : 0;
+        let loss = diff < 0 ? -diff : 0;
+        avgGain = (avgGain * (period - 1) + gain) / period;
+        avgLoss = (avgLoss * (period - 1) + loss) / period;
+        if (avgLoss === 0) rsi = 100;
+        else rsi = 100 - (100 / (1 + avgGain / avgLoss));
+      }
+      return rsi;
     }
-  }
-
-  // ---------- AUTHENTICATION ----------
-  unlockBtn.addEventListener('click', () => {
-    try {
-      const decrypted = CryptoJS.AES.decrypt(encryptedPassword, encryptionKey).toString(CryptoJS.enc.Utf8);
+    
+    function calculateEMA(prices, period) {
+      const k = 2 / (period + 1);
+      const ema = [prices[0]];
+      for (let i = 1; i < prices.length; i++) {
+        ema.push(prices[i] * k + ema[i-1] * (1 - k));
+      }
+      return ema;
+    }
+    
+    function calculateMACD(prices, fast = 12, slow = 26, signal = 9) {
+      if (prices.length < slow) return { macd: null, signalLine: null };
+      const emaFast = calculateEMA(prices, fast);
+      const emaSlow = calculateEMA(prices, slow);
+      const macdLine = emaFast.map((v, i) => v - emaSlow[i]);
+      const signalLine = calculateEMA(macdLine, signal);
+      return {
+        macd: macdLine[macdLine.length-1],
+        signalLine: signalLine[signalLine.length-1]
+      };
+    }
+    
+    function calculateSMA(prices, period) {
+      const res = new Array(prices.length).fill(null);
+      for (let i = 0; i < prices.length; i++) {
+        if (i < period - 1) continue;
+        let sum = 0;
+        for (let j = i - period + 1; j <= i; j++) sum += prices[j];
+        res[i] = sum / period;
+      }
+      return res;
+    }
+    
+    // Fetch from Yahoo Finance
+    async function getYahooData(symbol) {
+      try {
+        const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=5m&range=8d`;
+        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+        const response = await axios.get(proxyUrl);
+        const data = response.data.chart.result?.[0];
+        if (!data) return null;
+        
+        const closes = data.indicators.quote[0].close.filter(v => v !== null);
+        const volumes = data.indicators.quote[0].volume.filter(v => v !== null);
+        if (closes.length < 100) return null;
+        
+        const currentPrice = closes[closes.length-1];
+        const rsi = calculateRSI(closes, 14);
+        const { macd, signalLine } = calculateMACD(closes, 12, 26, 9);
+        const volume = volumes[volumes.length-1] || 0;
+        
+        // Calculate SMAs
+        const sma50arr = calculateSMA(closes, 50);
+        const sma100arr = calculateSMA(closes, 100);
+        const sma200arr = calculateSMA(closes, 200);
+        const sma500arr = calculateSMA(closes, 500);
+        
+        const sma50 = sma50arr[sma50arr.length-1];
+        const sma100 = sma100arr[sma100arr.length-1];
+        const sma200 = sma200arr[sma200arr.length-1];
+        const sma500 = sma500arr[sma500arr.length-1];
+        
+        // Determine trend
+        let trend = 'sideways';
+        let trendIcon = '➡️';
+        if (sma50 && sma100 && sma200 && sma500) {
+          if (sma50 > sma100 && sma100 > sma200 && sma200 > sma500 && currentPrice > sma50) {
+            trend = 'uptrend';
+            trendIcon = '📈';
+          } else if (sma50 < sma100 && sma100 < sma200 && sma200 < sma500 && currentPrice < sma50) {
+            trend = 'downtrend';
+            trendIcon = '📉';
+          }
+        }
+        
+        return {
+          symbol,
+          currentPrice,
+          rsi,
+          macd,
+          signalLine,
+          volume,
+          sma50,
+          sma100,
+          sma200,
+          sma500,
+          trend,
+          trendIcon
+        };
+      } catch (error) {
+        console.error(`Error fetching Yahoo data for ${symbol}:`, error);
+        return null;
+      }
+    }
+    
+    // Fetch from Twelve Data
+    async function getTwelveData(symbol) {
+      try {
+        const url = "https://api.twelvedata.com/time_series";
+        const response = await axios.get(url, {
+          params: {
+            symbol: symbol,
+            interval: "5min",
+            outputsize: 500,
+            apikey: API_KEY,
+          },
+        });
+        
+        const data = response.data;
+        if (!data.values) return null;
+        
+        const values = data.values
+          .map(v => ({ 
+            datetime: new Date(v.datetime), 
+            close: parseFloat(v.close), 
+            volume: parseFloat(v.volume) || 0 
+          }))
+          .sort((a, b) => a.datetime - b.datetime);
+        
+        const closes = values.map(v => v.close);
+        const volumes = values.map(v => v.volume);
+        if (closes.length < 100) return null;
+        
+        const currentPrice = closes[closes.length-1];
+        const rsi = calculateRSI(closes, 14);
+        const { macd, signalLine } = calculateMACD(closes, 12, 26, 9);
+        const volume = volumes[volumes.length-1] || 0;
+        
+        const sma50arr = calculateSMA(closes, 50);
+        const sma100arr = calculateSMA(closes, 100);
+        const sma200arr = calculateSMA(closes, 200);
+        const sma500arr = calculateSMA(closes, 500);
+        
+        const sma50 = sma50arr[sma50arr.length-1];
+        const sma100 = sma100arr[sma100arr.length-1];
+        const sma200 = sma200arr[sma200arr.length-1];
+        const sma500 = sma500arr[sma500arr.length-1];
+        
+        let trend = 'sideways';
+        let trendIcon = '➡️';
+        if (sma50 && sma100 && sma200 && sma500) {
+          if (sma50 > sma100 && sma100 > sma200 && sma200 > sma500 && currentPrice > sma50) {
+            trend = 'uptrend';
+            trendIcon = '📈';
+          } else if (sma50 < sma100 && sma100 < sma200 && sma200 < sma500 && currentPrice < sma50) {
+            trend = 'downtrend';
+            trendIcon = '📉';
+          }
+        }
+        
+        return {
+          symbol,
+          currentPrice,
+          rsi,
+          macd,
+          signalLine,
+          volume,
+          sma50,
+          sma100,
+          sma200,
+          sma500,
+          trend,
+          trendIcon
+        };
+      } catch (error) {
+        console.error(`Error fetching Twelve Data for ${symbol}:`, error);
+        return null;
+      }
+    }
+    
+    // Get AI signal from backend
+    async function getAISignal(symbol, data) {
+      try {
+        const payload = {
+          symbol: symbol,
+          current_price: data.currentPrice,
+          rsi: data.rsi || 50,
+          macd: data.macd || 0,
+          signal_line: data.signalLine || 0,
+          volume: data.volume || 1000,
+          sma50: data.sma50 || null,
+          sma100: data.sma100 || null,
+          sma200: data.sma200 || null,
+          sma500: data.sma500 || null
+        };
+        
+        const response = await axios.post(AI_SERVER_URL, payload, { timeout: 30000 });
+        return {
+          direction: response.data.direction,
+          stopLoss: response.data.stop_loss,
+          takeProfit: response.data.take_profit,
+          raw: response.data.raw_llm_output
+        };
+      } catch (error) {
+        console.error(`AI signal error for ${symbol}:`, error);
+        return {
+          direction: 'ERROR',
+          stopLoss: null,
+          takeProfit: null,
+          error: error.message
+        };
+      }
+    }
+    
+    // Update statistics
+    function updateStats(data) {
+      const longCount = data.filter(item => item.aiSignal?.direction === 'LONG').length;
+      const shortCount = data.filter(item => item.aiSignal?.direction === 'SHORT').length;
+      const neutralCount = data.filter(item => item.aiSignal?.direction === 'NEUTRAL').length;
+      
+      document.getElementById('longCount').textContent = longCount;
+      document.getElementById('shortCount').textContent = shortCount;
+      document.getElementById('neutralCount').textContent = neutralCount;
+      document.getElementById('totalCount').textContent = data.length;
+      statsContainer.style.display = 'flex';
+    }
+    
+    // Render table
+    function renderTable(data) {
+      tableBody.innerHTML = '';
+      
+      data.forEach(item => {
+        const row = tableBody.insertRow();
+        
+        // Symbol
+        row.insertCell(0).innerHTML = `<span class="symbol">${item.symbol}</span>`;
+        
+        // Price & Trend
+        const trendClass = item.trend === 'uptrend' ? 'trend-up' : (item.trend === 'downtrend' ? 'trend-down' : 'trend-side');
+        row.insertCell(1).innerHTML = `
+          <div class="price">$${item.currentPrice?.toFixed(2) || 'N/A'}</div>
+          <div class="${trendClass}" style="font-size: 12px;">${item.trendIcon} ${item.trend || 'sideways'}</div>
+        `;
+        
+        // SMAs
+        row.insertCell(2).innerHTML = `<span class="sma-value">${item.sma50 ? item.sma50.toFixed(4) : '-'}</span>`;
+        row.insertCell(3).innerHTML = `<span class="sma-value">${item.sma100 ? item.sma100.toFixed(4) : '-'}</span>`;
+        row.insertCell(4).innerHTML = `<span class="sma-value">${item.sma200 ? item.sma200.toFixed(4) : '-'}</span>`;
+        row.insertCell(5).innerHTML = `<span class="sma-value">${item.sma500 ? item.sma500.toFixed(4) : '-'}</span>`;
+        
+        // AI Signal
+        let signalHtml = '';
+        if (item.aiSignal?.direction === 'LONG') {
+          signalHtml = `
+            <div class="signal-long">
+              🔵 LONG
+              <div class="sl-tp">SL: $${item.aiSignal.stopLoss?.toFixed(2)}<br>TP: $${item.aiSignal.takeProfit?.toFixed(2)}</div>
+            </div>
+          `;
+        } else if (item.aiSignal?.direction === 'SHORT') {
+          signalHtml = `
+            <div class="signal-short">
+              🔴 SHORT
+              <div class="sl-tp">SL: $${item.aiSignal.stopLoss?.toFixed(2)}<br>TP: $${item.aiSignal.takeProfit?.toFixed(2)}</div>
+            </div>
+          `;
+        } else if (item.aiSignal?.direction === 'NEUTRAL') {
+          signalHtml = `<div class="signal-neutral">⚪ NEUTRAL</div>`;
+        } else {
+          signalHtml = `<div class="signal-error">⚠️ ${item.aiSignal?.direction || 'N/A'}</div>`;
+        }
+        
+        row.insertCell(6).innerHTML = signalHtml;
+      });
+      
+      dataTable.style.display = 'table';
+      loadingSpinner.style.display = 'none';
+      progressContainer.style.display = 'none';
+    }
+    
+    // Main fetch function
+    async function fetchAllData() {
+      if (!isAuthorized) return;
+      
+      try {
+        statusText.textContent = 'Fetching market data...';
+        refreshBtn.disabled = true;
+        dataTable.style.display = 'none';
+        loadingSpinner.style.display = 'block';
+        progressContainer.style.display = 'none';
+        statsContainer.style.display = 'none';
+        
+        // Fetch all market data
+        const yahooPromises = YAHOO_SYMBOLS.map(s => getYahooData(s));
+        const twelvePromises = TWELVE_SYMBOLS.map(s => getTwelveData(s));
+        let allMarketData = await Promise.all([...yahooPromises, ...twelvePromises]);
+        allMarketData = allMarketData.filter(d => d !== null);
+        
+        if (allMarketData.length === 0) {
+          throw new Error('No market data received');
+        }
+        
+        statusText.textContent = `Got ${allMarketData.length} assets, fetching AI signals...`;
+        progressContainer.style.display = 'block';
+        
+        // Process AI signals sequentially with progress
+        for (let i = 0; i < allMarketData.length; i++) {
+          const item = allMarketData[i];
+          const percent = ((i + 1) / allMarketData.length) * 100;
+          progressBar.style.width = `${percent}%`;
+          progressBar.textContent = `${Math.round(percent)}% - Processing ${item.symbol}`;
+          
+          const aiSignal = await getAISignal(item.symbol, item);
+          item.aiSignal = aiSignal;
+          
+          statusText.textContent = `AI signal for ${item.symbol} (${i+1}/${allMarketData.length})`;
+        }
+        
+        currentData = allMarketData;
+        updateStats(currentData);
+        renderTable(currentData);
+        statusText.textContent = `✅ Updated: ${new Date().toLocaleString()}`;
+        
+      } catch (error) {
+        console.error('Error fetching data:', error);
+        statusText.textContent = `❌ Error: ${error.message}`;
+        alert('Error fetching data. Make sure the backend server is running on port 5000');
+      } finally {
+        refreshBtn.disabled = false;
+      }
+    }
+    
+    // Authentication
+    unlockBtn.addEventListener('click', () => {
+      const decrypted = CryptoJS.AES.decrypt(encryptedPassword, ENCRYPTION_KEY).toString(CryptoJS.enc.Utf8);
       if (passwordInput.value === decrypted) {
-        authorized = true;
+        isAuthorized = true;
         loginView.style.display = 'none';
-        mainView.style.display = '';
-        fetchDataAndRender();
-      } else alert("Wrong password!");
-    } catch {
-      alert("Decryption error");
-    }
-  });
-
-  passwordInput.addEventListener('keydown', e => { if (e.key === 'Enter') unlockBtn.click(); });
-  refreshBtn.addEventListener('click', () => { if (authorized) fetchDataAndRender(); });
-  passwordInput.focus();
-})();
-</script>
+        mainView.style.display = 'block';
+        fetchAllData();
+      } else {
+        alert('Wrong password!');
+        passwordInput.value = '';
+      }
+    });
+    
+    passwordInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') unlockBtn.click();
+    });
+    
+    refreshBtn.addEventListener('click', () => {
+      if (isAuthorized) fetchAllData();
+    });
+    
+    // Focus on password input
+    passwordInput.focus();
+  </script>
 </body>
 </html>
