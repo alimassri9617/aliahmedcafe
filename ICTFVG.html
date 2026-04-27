@@ -491,7 +491,7 @@
         if (!candles?.length) return showToast(`❌ No data`);
         const indicators = currentIndicatorsMap.get(symbol) || [];
         const rows = candles.map((c, i) => `${c.datetime},${c.open},${c.high},${c.low},${c.close},${indicators[i]?.ma50?.toFixed(4)||''},${indicators[i]?.macdHist?.toFixed(4)||''},${indicators[i]?.stochK?.toFixed(1)||''}`).join("\n");
-        const csv = "Datetime,Open,High,Low,Close,SMA50,MACD_Hist,StochK\n" + rows;
+        const csv = "  Datetime,Open,High,Low,Close,SMA50,MACD_Hist,StochK\n" + rows +"You Are Expert ICT trader accourding to this data give me signal where to go long or short or hold  and where to put the stop loss and tp profite ";
         navigator.clipboard.writeText(csv).then(() => showToast(`📋 Copied ${symbol}`));
     }
 
