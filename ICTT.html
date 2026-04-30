@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>ICT Perfect Signal | BOS + MSS + Daily Bias | Volume Indicator & CSV</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js"></script>
+    <style>
+        details summary { cursor: pointer; list-style: none; }
+        details summary::-webkit-details-marker { display: none; }
+        .chevron { transition: transform 0.2s; }
+        details[open] .chevron { transform: rotate(90deg); }
+        .toast-msg { position: fixed; bottom: 24px; right: 24px; background: #1f2937; color: white; padding: 8px 20px; border-radius: 40px; font-size: 0.8rem; z-index: 2000; }
+        .signal-strength { display: inline-block; width: 70px; text-align: center; font-weight: bold; border-radius: 20px; padding: 2px 6px; }
+        .strength-4 { background: #22c55e; color: white; }
+        .strength-3 { background: #eab308; color: black; }
+        .strength-2 { background: #f97316; color: white; }
+        .strength-1 { background: #ef4444; color: white; }
+        .chart-container-wrapper { transition: all 0.2s ease; }
+        .chart-box { width: 100%; height: 480px; background: #0e1824; border-radius: 16px; }
+    </style>
+</head>
+<body class="bg-slate-100 font-sans">
+
+<div class="container mx-auto px-4 py-6 max-w-[1600px]">
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-2">
+        <h1 class="text-2xl md:text-3xl font-bold text-slate-800 flex items-center gap-2">
+            🎯 ICT PRO STRUCTURE 
+            <span class="text-sm font-medium bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full">BOS · MSS · Daily Bias · TP1/TP2/TP3 · VOLUME</span>
+        </h1>
+    </div>
+    <div class="text-slate-600 text-sm mb-6 border-l-4 border-blue-500 pl-4 bg-white/60 rounded-r-xl py-2 pr-4 w-fit shadow-sm">
+        🔥 Break of Structure (BOS) + Market Structure Shift (MSS) + Daily Bias + FVG + MACD + StochRSI → Perfect LONG/SHORT with 3 TPs | 📊 Volume histogram + CSV export includes volume
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 flex flex-wrap items-center justify-between gap-4 mb-8">
+        <div class="flex items-center gap-3 bg-slate-50 px-4 py-2 rounded-full">
+            <span class="text-sm font-medium">⏱️ Timeframe:</span>
+            <select id="intervalSelect" class="border border-slate-300 rounded-full px-4 py-1.5 text-sm">
+                <option value="1min">1 min</option><option value="5min">5 min</option><option value="15min" selected>15 min</option>
+                <option value="30min">30 min</option><option value="1h">1 hour</option><option value="4h">4 hours</option>
+                <option value="1day">1 day</option><option value="1week">1 week</option>
+            </select>
+        </div>
+        <button id="fetchBtn" class="bg-slate-800 hover:bg-slate-900 text-white px-6 py-2 rounded-full text-sm font-semibold shadow-md">🔄 FETCH + ICT STRUCTURE</button>
+        <div id="globalStatus" class="text-xs font-mono bg-slate-100 px-4 py-2 rounded-full text-slate-600">⚡ Ready | Volume data + histogram | CSV includes volume</div>
+    </div>
+
+    <div id="candlesContainer" class="space-y-6">
+        <div class="bg-white rounded-2xl p-10 text-center text-slate-400 shadow-sm">⏳ Load market data → Structure analysis & multi‑TP signals</div>
+    </div>
+    <footer class="mt-10 text-center text-xs text-slate-500 border-t border-slate-200 pt-6">
+        📈 Charts: FVG zones | 🟩🟥 Order blocks | 🟣 Liquidity levels | 🟠 SMA 50 | 🔵 SMA 100 | 🩷 SMA 200 (daily bias) | 📊 Volume histogram (green/red bars)
+    </footer>
+</div>
+
+<script>
+    const API_KEY = "b03b52a7e2e348b994a45de0b3f6ae09";
+    const BASE_URL = "https://api.twelvedata.com/time_series";
+    const SYMBOLS = ["XAU/USD", "EUR/USD", "GBP/USD", "USD/JPY", "BTC/USD", "GBP/JPY", "AUD/USD", "NZD/USD"];
+    const OUTPUT_SIZE = 150;
+
+    let currentCandlesMap = new Map();      // symbol -> candles[] with volume
+    let currentIndicatorsMap = new Map();
+    let chartInstances = new Map(); // symbol -> { chart, series, volumeSeries, resizeObserver }
+
+    const fetchBtn = document.getElementById("fetchBtn");
+    const globalStatus = document.getElementById("globalStatus");
+    const container = document.getElementById("candlesContainer");
+    const intervalSelect = document.getElementById("intervalSelect");
+    const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+    // helpers
+    function formatPrice(v, sym = "") {
+        if (v === undefined || v === null) return '—';
+        if (sym === "BTC/USD" || Math.abs(v) > 5000) return v.toFixed(2);
+        if (Math.abs(v) < 0.01) return v.toFixed(5);
+        return v.toFixed(4);
+    }
+
+    function formatVolume(v) {
+        if (v === undefined || v === null) return '—';
+        if (v > 1e6) return (v / 1e6).toFixed(2) + 'M';
+        if (v > 1e3) return (v / 1e3).toFixed(1) + 'K';
+        return v.toFixed(0);
+    }
+
+    function toTimestamp(datetimeStr) {
+        let d = new Date(datetimeStr);
+        if (isNaN(d.getTime())) d = new Date(datetimeStr.replace(' ', 'T'));
+        return Math.floor(d.getTime() / 1000);
+    }
+
+    // ---------- INDICATORS (unchanged, volume not needed) ----------
+    function computeMACD(closes, fast=12, slow=26, signal=9) {
+        const ema = (data, period) => {
+            const k = 2 / (period + 1);
+            let emaArr = new Array(data.length).fill(null);
+            if (data.length === 0) return emaArr;
+            emaArr[0] = data[0];
+            for (let i = 1; i < data.length; i++) emaArr[i] = data[i] * k + emaArr[i-1] * (1 - k);
+            return emaArr;
+        };
+        const emaFast = ema(closes, fast);
+        const emaSlow = ema(closes, slow);
+        const macdLine = emaFast.map((v, i) => v !== null && emaSlow[i] !== null ? v - emaSlow[i] : null);
+        const signalLine = ema(macdLine.map(v => v === null ? 0 : v), signal);
+        const histogram = macdLine.map((v, i) => v !== null && signalLine[i] !== null ? v - signalLine[i] : null);
+        return { macdLine, signalLine, histogram };
+    }
+
+    function computeStochasticRSI(closes, period=14, smoothK=3, smoothD=3) {
+        if (closes.length < period) return { k: new Array(closes.length).fill(null), d: new Array(closes.length).fill(null) };
+        let rsiValues = [];
+        for (let i = period; i < closes.length; i++) {
+            let gains = 0, losses = 0;
+            for (let j = i-period+1; j <= i; j++) {
+                let change = closes[j] - closes[j-1];
+                if (change >= 0) gains += change; else losses -= change;
+            }
+            let avgGain = gains / period, avgLoss = losses / period;
+            let rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
+            rsiValues.push(100 - (100 / (1 + rs)));
+        }
+        let fullRsi = new Array(closes.length).fill(null);
+        for (let i = 0; i < rsiValues.length; i++) fullRsi[period + i] = rsiValues[i];
+        
+        const stoch = (values, kPeriod) => {
+            let result = new Array(values.length).fill(null);
+            for (let i = kPeriod-1; i < values.length; i++) {
+                let window = values.slice(i-kPeriod+1, i+1).filter(v => v !== null);
+                if (window.length < kPeriod) continue;
+                let lowest = Math.min(...window), highest = Math.max(...window);
+                if (highest === lowest) result[i] = 50;
+                else result[i] = (values[i] - lowest) / (highest - lowest) * 100;
+            }
+            return result;
+        };
+        let rawK = stoch(fullRsi, smoothK);
+        let kLine = rawK;
+        let dLine = stoch(kLine, smoothD);
+        return { k: kLine, d: dLine };
+    }
+
+    function computeIndicators(candlesDesc) {
+        if (!candlesDesc?.length) return [];
+        const len = candlesDesc.length;
+        const ascending = [...candlesDesc].reverse();
+        const closes = ascending.map(c => c.close);
+        
+        const sma = (data, period) => {
+            const res = new Array(data.length).fill(null);
+            let sum = 0;
+            for (let i = 0; i < data.length; i++) {
+                sum += data[i];
+                if (i >= period - 1) { res[i] = sum / period; sum -= data[i - (period - 1)]; }
+            }
+            return res;
+        };
+        const computeRSI = (prices, period = 14) => {
+            const rsiArr = new Array(prices.length).fill(null);
+            if (prices.length < period + 1) return rsiArr;
+            let gains = 0, losses = 0;
+            for (let i = 1; i <= period; i++) {
+                const change = prices[i] - prices[i-1];
+                if (change >= 0) gains += change; else losses -= change;
+            }
+            let avgGain = gains / period, avgLoss = losses / period;
+            let rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
+            rsiArr[period] = 100 - (100 / (1 + rs));
+            for (let i = period + 1; i < prices.length; i++) {
+                const change = prices[i] - prices[i-1];
+                const currGain = change > 0 ? change : 0;
+                const currLoss = change < 0 ? -change : 0;
+                avgGain = (avgGain * (period - 1) + currGain) / period;
+                avgLoss = (avgLoss * (period - 1) + currLoss) / period;
+                rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
+                rsiArr[i] = 100 - (100 / (1 + rs));
+            }
+            return rsiArr;
+        };
+        
+        const sma50_asc = sma(closes, 50);
+        const sma100_asc = sma(closes, 100);
+        const sma200_asc = sma(closes, 200);
+        const rsi_asc = computeRSI(closes, 14);
+        const { histogram } = computeMACD(closes);
+        const stochRsi = computeStochasticRSI(closes, 14, 3, 3);
+        
+        const indicatorsDesc = new Array(len);
+        for (let i = 0; i < len; i++) {
+            const ascIdx = len - 1 - i;
+            indicatorsDesc[i] = {
+                ma50: sma50_asc[ascIdx] ?? null,
+                ma100: sma100_asc[ascIdx] ?? null,
+                ma200: sma200_asc[ascIdx] ?? null,
+                rsi: rsi_asc[ascIdx] ?? null,
+                macdHist: histogram[ascIdx] ?? null,
+                stochK: stochRsi.k[ascIdx] ?? null,
+                stochD: stochRsi.d[ascIdx] ?? null
+            };
+        }
+        return indicatorsDesc;
+    }
+
+    function computeATR(candlesDesc, period=14) {
+        if (!candlesDesc || candlesDesc.length < period+1) return null;
+        const ascending = [...candlesDesc].reverse();
+        let trSum = 0;
+        for (let i = 1; i <= period; i++) {
+            const high = ascending[i].high, low = ascending[i].low, prevClose = ascending[i-1].close;
+            trSum += Math.max(high - low, Math.abs(high - prevClose), Math.abs(low - prevClose));
+        }
+        return trSum / period;
+    }
+
+    // ---------- ICT STRUCTURE DETECTORS ----------
+    function detectFVGZones(candlesAsc) {
+        const zones = [];
+        for (let i = 0; i < candlesAsc.length - 2; i++) {
+            const c1 = candlesAsc[i], c3 = candlesAsc[i+2];
+            if (c1.high < c3.low) zones.push({ low: c1.high, high: c3.low, type: "bullish", timeStart: c1.datetime, timeEnd: c3.datetime });
+            if (c1.low > c3.high) zones.push({ low: c3.high, high: c1.low, type: "bearish", timeStart: c1.datetime, timeEnd: c3.datetime });
+        }
+        return zones;
+    }
+
+    function detectBOS(candlesAsc) {
+        let bosBull = false, bosBear = false;
+        if (candlesAsc.length < 20) return { bosBull, bosBear };
+        const lastHigh = Math.max(...candlesAsc.slice(-10).map(c => c.high));
+        const prevHigh = Math.max(...candlesAsc.slice(-20, -10).map(c => c.high));
+        const lastLow = Math.min(...candlesAsc.slice(-10).map(c => c.low));
+        const prevLow = Math.min(...candlesAsc.slice(-20, -10).map(c => c.low));
+        if (lastHigh > prevHigh) bosBull = true;
+        if (lastLow < prevLow) bosBear = true;
+        return { bosBull, bosBear };
+    }
+
+    function detectMSS(candlesAsc) {
+        let mssBull = false, mssBear = false;
+        if (candlesAsc.length < 30) return { mssBull, mssBear };
+        const highs = candlesAsc.map(c => c.high);
+        const lows = candlesAsc.map(c => c.low);
+        const recentHighs = highs.slice(-15);
+        const olderHighs = highs.slice(-30, -15);
+        const recentLows = lows.slice(-15);
+        const olderLows = lows.slice(-30, -15);
+        const recentMax = Math.max(...recentHighs);
+        const olderMax = Math.max(...olderHighs);
+        const recentMin = Math.min(...recentLows);
+        const olderMin = Math.min(...olderLows);
+        if (recentMax < olderMax && recentMin < olderMin) mssBear = true;
+        if (recentMin > olderMin && recentMax > olderMax) mssBull = true;
+        return { mssBull, mssBear };
+    }
+
+    function detectOrderBlocks(candlesAsc) {
+        const blocks = [];
+        for (let i = 2; i < candlesAsc.length - 3; i++) {
+            const candle = candlesAsc[i], prev = candlesAsc[i-1];
+            const range = candle.high - candle.low;
+            const body = Math.abs(candle.close - candle.open);
+            if (candle.close > candle.open && candle.close > prev.high && body > range * 0.6)
+                blocks.push({ time: candle.datetime, type: "bullish_ob" });
+            else if (candle.close < candle.open && candle.low < prev.low && body > range * 0.6)
+                blocks.push({ time: candle.datetime, type: "bearish_ob" });
+        }
+        return blocks.slice(-12);
+    }
+
+    function detectLiquidityLevels(candlesAsc, windowSize = 7) {
+        const levels = [];
+        for (let i = windowSize; i < candlesAsc.length - windowSize; i++) {
+            let isHigh = true, isLow = true;
+            for (let j = i - windowSize; j <= i + windowSize; j++) {
+                if (j === i) continue;
+                if (candlesAsc[j].high >= candlesAsc[i].high) isHigh = false;
+                if (candlesAsc[j].low <= candlesAsc[i].low) isLow = false;
+            }
+            if (isHigh) levels.push({ time: candlesAsc[i].datetime, price: candlesAsc[i].high });
+            if (isLow) levels.push({ time: candlesAsc[i].datetime, price: candlesAsc[i].low });
+        }
+        return levels.slice(-8);
+    }
+
+    // ---------- PERFECT SIGNAL ENGINE (unchanged) ----------
+    function getPerfectSignal(symbol, candlesDesc, indicators) {
+        if (!candlesDesc || candlesDesc.length < 60) return { direction: "NEUTRAL", score: 0, reason: "insufficient data" };
+        const close = candlesDesc[0].close;
+        const asc = [...candlesDesc].reverse();
+        const latest = indicators[0] || {};
+        const prev = indicators[1] || {};
+        const { ma50, ma100, ma200, rsi, macdHist, stochK } = latest;
+        const prevMacdHist = prev.macdHist;
+        
+        const trendBull = (ma50 && ma100 && ma50 > ma100 && close > ma50);
+        const trendBear = (ma50 && ma100 && ma50 < ma100 && close < ma50);
+        const dailyBiasBull = (ma200 && close > ma200);
+        const dailyBiasBear = (ma200 && close < ma200);
+        const macdBullish = (macdHist > 0 && prevMacdHist !== null && prevMacdHist <= 0);
+        const macdBearish = (macdHist < 0 && prevMacdHist !== null && prevMacdHist >= 0);
+        const stochOversold = (stochK !== null && stochK < 20);
+        const stochOverbought = (stochK !== null && stochK > 80);
+        const rsiOversold = (rsi !== null && rsi < 32);
+        const rsiOverbought = (rsi !== null && rsi > 68);
+        
+        const fvgZones = detectFVGZones(asc);
+        const recentBullFvg = fvgZones.filter(z => z.type === "bullish").pop();
+        const recentBearFvg = fvgZones.filter(z => z.type === "bearish").pop();
+        
+        const { bosBull, bosBear } = detectBOS(asc);
+        const { mssBull, mssBear } = detectMSS(asc);
+        
+        let longScore = 0, shortScore = 0;
+        let longConfluence = [], shortConfluence = [];
+        
+        if (recentBullFvg) { longScore += 2; longConfluence.push("Bullish FVG"); }
+        if (recentBearFvg) { shortScore += 2; shortConfluence.push("Bearish FVG"); }
+        if (trendBull) { longScore += 1.5; longConfluence.push("Uptrend"); }
+        if (trendBear) { shortScore += 1.5; shortConfluence.push("Downtrend"); }
+        if (dailyBiasBull) { longScore += 1; longConfluence.push("Daily Bullish"); }
+        if (dailyBiasBear) { shortScore += 1; shortConfluence.push("Daily Bearish"); }
+        if (macdBullish) { longScore += 1.5; longConfluence.push("MACD bullish"); }
+        if (macdBearish) { shortScore += 1.5; shortConfluence.push("MACD bearish"); }
+        if (stochOversold || rsiOversold) { longScore += 1; longConfluence.push("Oversold"); }
+        if (stochOverbought || rsiOverbought) { shortScore += 1; shortConfluence.push("Overbought"); }
+        if (bosBull || mssBull) { longScore += 1.5; longConfluence.push("BOS/MSS bullish"); }
+        if (bosBear || mssBear) { shortScore += 1.5; shortConfluence.push("BOS/MSS bearish"); }
+        
+        let direction = "NEUTRAL", score = 0, confluence = [];
+        if (longScore >= 4 && recentBullFvg) { direction = "LONG"; score = Math.min(5, longScore); confluence = longConfluence; }
+        else if (shortScore >= 4 && recentBearFvg) { direction = "SHORT"; score = Math.min(5, shortScore); confluence = shortConfluence; }
+        
+        if (direction === "NEUTRAL") return { direction, score: 0, reason: "Need FVG + 2+ confirmations (BOS/MSS, daily bias, etc)" };
+        
+        const atr = computeATR(candlesDesc, 14) || close * 0.005;
+        const swingLow = Math.min(...candlesDesc.slice(0, 20).map(c => c.low));
+        const swingHigh = Math.max(...candlesDesc.slice(0, 20).map(c => c.high));
+        const fvg = direction === "LONG" ? recentBullFvg : recentBearFvg;
+        let entry = (fvg.low + fvg.high) / 2;
+        let stopLoss;
+        if (direction === "LONG") {
+            entry = Math.min(entry, close + atr * 0.5);
+            stopLoss = Math.min(swingLow, entry - atr * 1.2);
+        } else {
+            entry = Math.max(entry, close - atr * 0.5);
+            stopLoss = Math.max(swingHigh, entry + atr * 1.2);
+        }
+        const risk = Math.abs(entry - stopLoss);
+        const tp1 = direction === "LONG" ? entry + risk * 1.0 : entry - risk * 1.0;
+        const tp2 = direction === "LONG" ? entry + risk * 1.5 : entry - risk * 1.5;
+        const tp3 = direction === "LONG" ? entry + risk * 2.0 : entry - risk * 2.0;
+        
+        const strengthStars = "★".repeat(Math.floor(score)) + "☆".repeat(5 - Math.floor(score));
+        return { direction, entry, stopLoss, tp1, tp2, tp3, score, strengthStars, reason: confluence.slice(0,4).join(" + ") };
+    }
+
+    // ---------- CHART RENDERING (includes VOLUME HISTOGRAM) ----------
+    async function renderChartForSymbol(symbol, containerId) {
+        const candles = currentCandlesMap.get(symbol);
+        if (!candles || candles.length < 20) return null;
+        const containerElem = document.getElementById(containerId);
+        if (!containerElem) return null;
+        
+        let attempts = 0;
+        while ((containerElem.clientWidth === 0 || containerElem.clientHeight === 0) && attempts < 20) {
+            await new Promise(r => setTimeout(r, 100));
+            attempts++;
+        }
+        const width = containerElem.clientWidth;
+        if (width === 0) containerElem.style.width = "100%";
+        
+        const sortedAsc = [...candles].reverse();
+        const chartData = sortedAsc.map(c => ({ time: toTimestamp(c.datetime), open: c.open, high: c.high, low: c.low, close: c.close }));
+        // Volume data for histogram (same time points)
+        const volumeData = sortedAsc.map(c => ({ time: toTimestamp(c.datetime), value: c.volume || 0, color: c.close >= c.open ? '#26a69a' : '#ef5350' }));
+        
+        if (chartInstances.has(symbol)) {
+            const old = chartInstances.get(symbol);
+            if (old.resizeObserver) old.resizeObserver.disconnect();
+            if (old.chart) old.chart.remove();
+            chartInstances.delete(symbol);
+        }
+        
+        const chart = LightweightCharts.createChart(containerElem, {
+            layout: { background: { color: '#0e1824' }, textColor: '#DDD' },
+            grid: { vertLines: { color: '#1e2a3a' }, horzLines: { color: '#1e2a3a' } },
+            width: containerElem.clientWidth || 800,
+            height: 480,
+            timeScale: { timeVisible: true, borderColor: '#2d3e5a' }
+        });
+        
+        // Main candlestick series
+        const candlestickSeries = chart.addSeries(LightweightCharts.CandlestickSeries, { upColor: '#26a69a', downColor: '#ef5350' });
+        candlestickSeries.setData(chartData);
+        
+        // Volume histogram series (separate price scale at bottom)
+        const volumeSeries = chart.addHistogramSeries({
+            priceFormat: { type: 'volume' },
+            priceScaleId: 'volume',
+            color: '#26a69a',
+            thinBars: false
+        });
+        // Set volume data with dynamic color
+        volumeSeries.setData(volumeData.map(v => ({ time: v.time, value: v.value, color: v.color })));
+        
+        // position volume scale at bottom 25% of chart height
+        chart.priceScale('volume').applyOptions({
+            scaleMargins: { top: 0.8, bottom: 0 },
+            visible: true,
+            borderVisible: false
+        });
+        
+        // SMAs
+        const indicators = currentIndicatorsMap.get(symbol) || [];
+        const sma50 = [], sma100 = [], sma200 = [];
+        for (let i = 0; i < sortedAsc.length; i++) {
+            const ind = indicators[sortedAsc.length - 1 - i];
+            if (ind?.ma50) sma50.push({ time: toTimestamp(sortedAsc[i].datetime), value: ind.ma50 });
+            if (ind?.ma100) sma100.push({ time: toTimestamp(sortedAsc[i].datetime), value: ind.ma100 });
+            if (ind?.ma200) sma200.push({ time: toTimestamp(sortedAsc[i].datetime), value: ind.ma200 });
+        }
+        if (sma50.length) chart.addSeries(LightweightCharts.LineSeries, { color: '#f59e0b', lineWidth: 2 }).setData(sma50);
+        if (sma100.length) chart.addSeries(LightweightCharts.LineSeries, { color: '#3b82f6', lineWidth: 2 }).setData(sma100);
+        if (sma200.length) chart.addSeries(LightweightCharts.LineSeries, { color: '#ec489a', lineWidth: 1, lineStyle: 2 }).setData(sma200);
+        
+        const fvgZones = detectFVGZones(sortedAsc);
+        fvgZones.forEach(zone => {
+            const from = toTimestamp(zone.timeStart), to = toTimestamp(zone.timeEnd);
+            if (!from || !to) return;
+            const rect = chart.addSeries(LightweightCharts.BaselineSeries, {
+                baseValue: { type: 'price', price: (zone.low+zone.high)/2 },
+                topLineColor: zone.type === 'bullish' ? '#2ecc71' : '#e67e22',
+                bottomLineColor: zone.type === 'bullish' ? '#2ecc71' : '#e67e22',
+                topFillColor1: zone.type === 'bullish' ? 'rgba(46,204,113,0.2)' : 'rgba(230,126,34,0.2)'
+            });
+            rect.setData([{ time: from, value: zone.high }, { time: to, value: zone.low }]);
+        });
+        
+        const orderBlocks = detectOrderBlocks(sortedAsc);
+        const markers = orderBlocks.map(ob => ({
+            time: toTimestamp(ob.time),
+            position: ob.type === 'bullish_ob' ? 'belowBar' : 'aboveBar',
+            color: ob.type === 'bullish_ob' ? '#16a34a' : '#dc2626',
+            shape: 'square',
+            text: ob.type === 'bullish_ob' ? 'OB 🔼' : 'OB 🔽'
+        }));
+        candlestickSeries.setMarkers(markers);
+        
+        const liqLevels = detectLiquidityLevels(sortedAsc, 6);
+        const firstTime = toTimestamp(sortedAsc[0].datetime);
+        const lastTime = toTimestamp(sortedAsc[sortedAsc.length-1].datetime);
+        liqLevels.forEach(level => {
+            const line = chart.addSeries(LightweightCharts.LineSeries, { color: '#f472b6', lineWidth: 1, lineStyle: 1 });
+            line.setData([{ time: firstTime, value: level.price }, { time: lastTime, value: level.price }]);
+        });
+        
+        chart.timeScale().fitContent();
+        
+        const resizeObserver = new ResizeObserver(() => {
+            const newWidth = containerElem.clientWidth;
+            if (newWidth > 0) chart.applyOptions({ width: newWidth });
+            chart.timeScale().fitContent();
+        });
+        resizeObserver.observe(containerElem);
+        
+        chartInstances.set(symbol, { chart, resizeObserver, volumeSeries });
+        return chart;
+    }
+
+    // ---------- DATA FETCH (includes volume) ----------
+    async function fetchCandlesForSymbol(symbol, interval) {
+        const url = new URL(BASE_URL);
+        url.searchParams.append("symbol", symbol);
+        url.searchParams.append("interval", interval);
+        url.searchParams.append("outputsize", OUTPUT_SIZE);
+        url.searchParams.append("apikey", API_KEY);
+        try {
+            const resp = await fetch(url);
+            if (!resp.ok) throw new Error();
+            const data = await resp.json();
+            if (!data.values?.length) return [];
+            return data.values.map(c => ({ 
+                datetime: c.datetime, 
+                open: parseFloat(c.open), 
+                high: parseFloat(c.high), 
+                low: parseFloat(c.low), 
+                close: parseFloat(c.close),
+                volume: c.volume ? parseFloat(c.volume) : 0
+            }));
+        } catch { return []; }
+    }
+
+    async function fetchAllSymbols() {
+        const interval = intervalSelect.value;
+        fetchBtn.disabled = true;
+        globalStatus.innerHTML = `⏳ Fetching ${interval} + volume analysis...`;
+        container.innerHTML = `<div class="bg-white rounded-2xl p-10 text-center">🌀 Loading market data & computing BOS/MSS...</div>`;
+        currentCandlesMap.clear();
+        currentIndicatorsMap.clear();
+        for (let i = 0; i < SYMBOLS.length; i++) {
+            const sym = SYMBOLS[i];
+            globalStatus.innerHTML = `📡 ${sym} (${i+1}/${SYMBOLS.length}) · fetching volume`;
+            const candles = await fetchCandlesForSymbol(sym, interval);
+            if (candles.length) {
+                currentCandlesMap.set(sym, candles);
+                currentIndicatorsMap.set(sym, computeIndicators(candles));
+            }
+            if (i < SYMBOLS.length - 1) await delay(500);
+        }
+        renderFullDashboard(interval);
+        globalStatus.innerHTML = `✅ STRUCTURE READY | Volume data included | CSV has volume column | ${currentCandlesMap.size} symbols`;
+        fetchBtn.disabled = false;
+    }
+
+    // CSV copy WITH VOLUME
+    function copySymbolData(symbol) {
+        const candles = currentCandlesMap.get(symbol);
+        if (!candles?.length) return showToast(`❌ No data`);
+        const indicators = currentIndicatorsMap.get(symbol) || [];
+        // Build CSV rows: Datetime,Open,High,Low,Close,Volume,SMA50,MACD_Hist,StochK
+        let rows = candles.map((c, i) => {
+            const vol = c.volume !== undefined ? c.volume : 0;
+            return `${c.datetime},${c.open},${c.high},${c.low},${c.close},${vol},${indicators[i]?.ma50?.toFixed(4)||''},${indicators[i]?.macdHist?.toFixed(4)||''},${indicators[i]?.stochK?.toFixed(1)||''}`;
+        }).join("\n");
+        const csv = `Datetime,Open,High,Low,Close,Volume,SMA50,MACD_Hist,StochK\n${rows}\n\n🎯 You Are Expert ICT trader accourding to this data give me signal where to go long or short or hold  and where to put the stop loss and tp profite`;
+        navigator.clipboard.writeText(csv).then(() => showToast(`📋 Copied ${symbol} with VOLUME column`));
+    }
+
+    function showToast(msg) { let t = document.querySelector('.toast-msg'); if(t) t.remove(); const toast = document.createElement('div'); toast.className = 'toast-msg'; toast.innerText = msg; document.body.appendChild(toast); setTimeout(() => toast.remove(), 2500); }
+
+    async function toggleChart(symbol, wrapperId, chartBoxId) {
+        const wrapper = document.getElementById(wrapperId);
+        if (!wrapper) return;
+        const isActive = wrapper.classList.contains('active');
+        if (!isActive) {
+            wrapper.classList.add('active');
+            setTimeout(async () => { await renderChartForSymbol(symbol, chartBoxId); }, 100);
+        } else {
+            wrapper.classList.remove('active');
+        }
+    }
+
+    function renderFullDashboard(interval) {
+        let html = '';
+        for (const sym of SYMBOLS) {
+            const candles = currentCandlesMap.get(sym);
+            if (!candles) continue;
+            const indicators = currentIndicatorsMap.get(sym);
+            const signal = getPerfectSignal(sym, candles, indicators);
+            const latestInd = indicators?.[0] || {};
+            const ma50Show = latestInd.ma50 ? formatPrice(latestInd.ma50, sym) : '—';
+            const ma100Show = latestInd.ma100 ? formatPrice(latestInd.ma100, sym) : '—';
+            const ma200Show = latestInd.ma200 ? formatPrice(latestInd.ma200, sym) : '—';
+            const rsiShow = latestInd.rsi !== null ? latestInd.rsi.toFixed(1) : '—';
+            const macdHist = latestInd.macdHist !== null ? latestInd.macdHist.toFixed(4) : '—';
+            const stochK = latestInd.stochK !== null ? latestInd.stochK.toFixed(1) : '—';
+            const latestVolume = candles[0]?.volume ? formatVolume(candles[0].volume) : '—';
+            
+            const dailyBias = (latestInd.ma200 && candles[0].close > latestInd.ma200) ? "BULLISH" : (latestInd.ma200 && candles[0].close < latestInd.ma200) ? "BEARISH" : "NEUTRAL";
+            const { bosBull, bosBear } = detectBOS([...candles].reverse());
+            const { mssBull, mssBear } = detectMSS([...candles].reverse());
+            const structureBull = (bosBull || mssBull) ? "✅ BOS/MSS UP" : "";
+            const structureBear = (bosBear || mssBear) ? "✅ BOS/MSS DOWN" : "";
+            
+            const signalColor = signal.direction === 'LONG' ? 'border-l-4 border-green-500 bg-green-50' : (signal.direction === 'SHORT' ? 'border-l-4 border-red-500 bg-red-50' : 'border-l-4 border-gray-400 bg-gray-50');
+            const strengthClass = `signal-strength ${signal.score >= 4 ? 'strength-4' : (signal.score >= 3 ? 'strength-3' : (signal.score >= 2 ? 'strength-2' : 'strength-1'))}`;
+            
+            const signalHtml = signal.direction !== 'NEUTRAL' ? `
+                <div class="flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl ${signalColor} mb-3">
+                    <div class="flex items-center gap-2"><span class="font-bold text-lg">${signal.direction}</span><span class="${strengthClass} text-xs px-2 py-0.5 rounded-full">${signal.strengthStars} (${signal.score.toFixed(1)})</span></div>
+                    <div class="flex gap-3 text-sm font-mono flex-wrap"><span class="bg-white px-2 py-1 rounded">📌 ENTRY: ${formatPrice(signal.entry, sym)}</span><span>🛑 SL: ${formatPrice(signal.stopLoss, sym)}</span><span>🎯 TP1: ${formatPrice(signal.tp1, sym)}</span><span>🎯 TP2: ${formatPrice(signal.tp2, sym)}</span><span>🎯 TP3: ${formatPrice(signal.tp3, sym)}</span></div>
+                    <div class="text-xs text-slate-700">🔥 ${signal.reason}</div>
+                </div>` : `<div class="p-3 rounded-xl bg-gray-50 border-l-4 border-gray-400 mb-3 text-sm">⏸️ NEUTRAL · ${signal.reason}</div>`;
+            
+            const wrapperId = `chartwrap_${sym.replace(/[\/\s]/g, '_')}`;
+            const chartBoxId = `chartbox_${sym.replace(/[\/\s]/g, '_')}`;
+            let tableRows = '';
+            for (let i = 0; i < Math.min(candles.length, 50); i++) {
+                const c = candles[i];
+                const volFormatted = formatVolume(c.volume);
+                tableRows += `<tr class="border-b border-slate-100 hover:bg-slate-50"><td class="text-left px-2 py-1 text-xs">${c.datetime}</td><td class="px-2 py-1 text-right">${formatPrice(c.open,sym)}</td><td class="px-2 py-1 text-right">${formatPrice(c.high,sym)}</td><td class="px-2 py-1 text-right">${formatPrice(c.low,sym)}</td><td class="px-2 py-1 text-right font-bold">${formatPrice(c.close,sym)}</td><td class="px-2 py-1 text-right text-slate-500">${volFormatted}</td></tr>`;
+            }
+            
+            html += `
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                    <details open>
+                        <summary class="px-5 py-3 bg-slate-50 cursor-pointer hover:bg-slate-100">
+                            <div class="flex flex-wrap items-center justify-between gap-3">
+                                <span class="font-mono font-bold text-lg">${sym}</span>
+                                <div class="flex gap-2 text-xs bg-white px-3 py-1 rounded-full shadow-sm flex-wrap"><span>📊 SMA50:${ma50Show}</span><span>SMA100:${ma100Show}</span><span>SMA200:${ma200Show}</span><span>RSI:${rsiShow}</span><span>MACD:${macdHist}</span><span>StochK:${stochK}</span><span>📀 VOL:${latestVolume}</span><span>📅 Daily: ${dailyBias}</span><span>${structureBull || structureBear}</span></div>
+                                <div class="flex gap-2"><button class="copy-btn text-xs bg-slate-700 text-white px-3 py-1 rounded-full" data-symbol="${sym}">📋 CSV (incl. Volume)</button><button class="chart-toggle-btn text-xs bg-indigo-700 text-white px-3 py-1 rounded-full" data-wrapper="${wrapperId}" data-symbol="${sym}" data-chartbox="${chartBoxId}">📈 ICT + VOLUME CHART</button></div>
+                                <span class="chevron text-slate-400 text-xs">▶</span>
+                            </div>
+                        </summary>
+                        <div class="p-4">${signalHtml}</div>
+                        <div id="${wrapperId}" class="chart-container-wrapper hidden px-4 pb-2"><div id="${chartBoxId}" class="chart-box"></div></div>
+                        <div class="overflow-x-auto max-h-[400px]">
+                            <table class="w-full text-xs border-collapse"><thead class="sticky top-0 bg-slate-100"><tr><th class="text-left p-2">Date</th><th>Open</th><th>High</th><th>Low</th><th>Close</th><th>Volume</th></tr></thead><tbody>${tableRows}</tbody></table>
+                        </div>
+                    </details>
+                </div>`;
+        }
+        container.innerHTML = html;
+        document.querySelectorAll('.copy-btn').forEach(btn => btn.addEventListener('click', (e) => { e.stopPropagation(); copySymbolData(btn.getAttribute('data-symbol')); }));
+        document.querySelectorAll('.chart-toggle-btn').forEach(btn => btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const wrapperId = btn.getAttribute('data-wrapper');
+            const sym = btn.getAttribute('data-symbol');
+            const chartBoxId = btn.getAttribute('data-chartbox');
+            await toggleChart(sym, wrapperId, chartBoxId);
+        }));
+    }
+    
+    window.addEventListener('load', () => fetchAllSymbols());
+    fetchBtn.addEventListener('click', fetchAllSymbols);
+</script>
+</body>
+</html>
