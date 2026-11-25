@@ -30,6 +30,8 @@
         .news-item.low { border-left-color: #16a34a; background: #f0fdf4; }
         .news-header { font-size: 0.7rem; font-weight: 600; color: #0369a1; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
         .news-loading { font-size: 0.7rem; color: #64748b; font-style: italic; }
+        .nasdaq-badge { background: #1e3a8a; color: #dbeafe; font-size: 0.6rem; border-radius: 20px; padding: 0px 6px; margin-left: 4px; }
+        .proxy-badge { background: #be185d; color: #fce7f3; font-size: 0.6rem; border-radius: 20px; padding: 0px 6px; margin-left: 4px; }
     </style>
 </head>
 <body class="bg-slate-100 font-sans">
@@ -42,12 +44,14 @@
             <span class="bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-sm font-medium">🌀 Gann Angles + Square of 9</span>
             <span class="bg-sky-100 text-sky-800 px-3 py-1 rounded-full text-sm font-medium">📰 Economic News per Symbol</span>
             <span class="weekday-badge">📅 Mon-Fri only (weekends excluded)</span>
+            <span class="bg-indigo-100 text-indigo-800 px-3 py-1 rounded-full text-sm font-medium">📈 NASDAQ 100 via cors.dev</span>
         </h1>
     </div>
     <div class="text-slate-600 text-sm mb-6 border-l-4 border-blue-500 pl-4 bg-white/60 rounded-r-xl py-2 pr-4 w-fit shadow-sm flex flex-wrap gap-x-4">
         <span>🔥 BOS + MSS + Daily Bias + FVG + MACD + StochRSI → LONG/SHORT with 3 TPs</span>
         <span class="text-purple-700 font-medium">🌀 Gann: Angles, Square of 9, Retracements, Time Cycles</span>
         <span class="text-sky-700 font-medium">📰 News: Biquote economic calendar (CORS open, no key)</span>
+        <span class="text-indigo-700 font-medium">📈 NASDAQ 100 (NDX) via Yahoo Finance + cors.dev (no key)</span>
     </div>
 
     <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 flex flex-wrap items-center justify-between gap-4 mb-8">
@@ -75,7 +79,7 @@
     </div>
 
     <footer class="mt-10 text-center text-xs text-slate-500 border-t border-slate-200 pt-6">
-        📈 Charts: FVG | 🟩🟥 OB | 🟣 Liquidity | 🟠 SMA50 | 🔵 SMA100 | 🩷 SMA200 | 📰 News via Biquote API | ⛔ Weekends excluded
+        📈 Charts: FVG | 🟩🟥 OB | 🟣 Liquidity | 🟠 SMA50 | 🔵 SMA100 | 🩷 SMA200 | 📰 News via Biquote API | ⛔ Weekends excluded | 📈 NASDAQ 100 via Yahoo Finance + cors.dev
     </footer>
 </div>
 
@@ -83,11 +87,11 @@
     const API_KEY = "b03b52a7e2e348b994a45de0b3f6ae09";
     const BASE_URL = "https://api.twelvedata.com/time_series";
 
-    // ✅ UPDATED SYMBOL LIST (as requested)
-    const SYMBOLS = ["XAU/USD", "EUR/USD", "USD/JPY", "GBP/USD", "AUD/USD", "USD/CAD", "USD/CHF", "NZD/USD"];
+    // ✅ UPDATED SYMBOL LIST (original + NASDAQ 100)
+    const SYMBOLS = ["XAU/USD", "EUR/USD", "USD/JPY", "GBP/USD", "AUD/USD", "USD/CAD", "USD/CHF", "NZD/USD", "NASDAQ 100"];
     const OUTPUT_SIZE = 500;
 
-    // ✅ UPDATED currency mapping (added USD/CAD and USD/CHF)
+    // ✅ UPDATED currency mapping
     const SYMBOL_CURRENCIES = {
         "XAU/USD": ["USD"],
         "EUR/USD": ["EUR", "USD"],
@@ -96,10 +100,15 @@
         "AUD/USD": ["AUD", "USD"],
         "USD/CAD": ["USD", "CAD"],
         "USD/CHF": ["USD", "CHF"],
-        "NZD/USD": ["NZD", "USD"]
+        "NZD/USD": ["NZD", "USD"],
+        "NASDAQ 100": ["USD"]
     };
 
     const BIQUOTE_CALENDAR_URL = "https://biquote.io/api/calendar";
+
+    // ✅ CORS PROXY for NASDAQ 100 (cors.dev — no API key, anonymous use)
+    const CORS_PROXY_PREFIX = "https://proxy.cors.dev/";
+    const YAHOO_NDX_BASE = "https://query1.finance.yahoo.com/v8/finance/chart/%5ENDX";
 
     let currentCandlesMap = new Map();
     let currentIndicatorsMap = new Map();
@@ -506,8 +515,11 @@
         return chart;
     }
 
-    // ---------- FETCH MARKET DATA ----------
+    // ---------- FETCH MARKET DATA (Twelve Data for forex/gold) ----------
     async function fetchCandlesForSymbol(symbol, interval) {
+        if (symbol === "NASDAQ 100") {
+            return await fetchNasdaqCandles(interval);
+        }
         const url = new URL(BASE_URL);
         url.searchParams.append("symbol", symbol);
         url.searchParams.append("interval", interval);
@@ -521,6 +533,81 @@
             const rawCandles = data.values.map(c => ({ datetime: c.datetime, open: parseFloat(c.open), high: parseFloat(c.high), low: parseFloat(c.low), close: parseFloat(c.close) }));
             return filterWeekendsOnly(rawCandles);
         } catch { return []; }
+    }
+
+    // ---------- FETCH NASDAQ 100 via cors.dev + Yahoo Finance ----------
+    async function fetchNasdaqCandles(interval) {
+        const yahooIntervalMap = {
+            '1min': '1m',
+            '5min': '5m',
+            '15min': '15m',
+            '30min': '30m',
+            '1h': '60m',
+            '4h': '60m',   // 4h not directly supported, use 60m as closest
+            '1day': '1d',
+            '1week': '1wk'
+        };
+        const yfInterval = yahooIntervalMap[interval] || '15m';
+        
+        let range = '1mo';
+        if (yfInterval === '1m') range = '7d';
+        else if (yfInterval === '5m' || yfInterval === '15m' || yfInterval === '30m') range = '1mo';
+        else if (yfInterval === '60m') range = '3mo';
+        else if (yfInterval === '1d') range = '1y';
+        else if (yfInterval === '1wk') range = '5y';
+
+        const targetUrl = `${YAHOO_NDX_BASE}?interval=${yfInterval}&range=${range}`;
+        // cors.dev expects the target URL to be prefixed directly after the proxy base
+        const proxiedUrl = CORS_PROXY_PREFIX + targetUrl;
+        
+        console.log(`📡 NASDAQ fetch via cors.dev: ${proxiedUrl}`);
+        
+        try {
+            const resp = await fetch(proxiedUrl, {
+                headers: { 'Accept': 'application/json' }
+            });
+            if (!resp.ok) throw new Error(`Proxy responded with ${resp.status}`);
+            const data = await resp.json();
+            
+            const result = data?.chart?.result?.[0];
+            if (!result?.timestamp?.length || !result?.indicators?.quote?.[0]) {
+                console.warn("NASDAQ 100: Yahoo response missing timestamps/quotes");
+                return [];
+            }
+            
+            const timestamps = result.timestamp;
+            const quotes = result.indicators.quote[0];
+            
+            const candles = [];
+            for (let i = 0; i < timestamps.length; i++) {
+                const open = quotes.open?.[i];
+                const high = quotes.high?.[i];
+                const low = quotes.low?.[i];
+                const close = quotes.close?.[i];
+                if (open == null || high == null || low == null || close == null) continue;
+                
+                const dt = new Date(timestamps[i] * 1000);
+                const datetimeStr = dt.toISOString().replace('T', ' ').substring(0, 19);
+                
+                candles.push({
+                    datetime: datetimeStr,
+                    open: parseFloat(open),
+                    high: parseFloat(high),
+                    low: parseFloat(low),
+                    close: parseFloat(close)
+                });
+            }
+            
+            // Sort descending (most recent first) to match Twelve Data format
+            candles.sort((a, b) => new Date(b.datetime) - new Date(a.datetime));
+            
+            const filtered = filterWeekendsOnly(candles);
+            console.log(`📊 NASDAQ 100: ${filtered.length} weekday candles loaded`);
+            return filtered;
+        } catch (e) {
+            console.warn(`NASDAQ 100 fetch failed: ${e.message}`);
+            return [];
+        }
     }
 
     async function fetchAllSymbols() {
@@ -717,13 +804,15 @@ Finally, summarize the overall best trade among all symbols. Keep it concise and
                 tableRows += `<tr class="border-b border-slate-100 hover:bg-slate-50"><td class="text-left px-2 py-1 text-xs">${c.datetime}</td><td class="px-2 py-1 text-right">${formatPrice(c.open,sym)}</td><td class="px-2 py-1 text-right">${formatPrice(c.high,sym)}</td><td class="px-2 py-1 text-right">${formatPrice(c.low,sym)}</td><td class="px-2 py-1 text-right font-bold">${formatPrice(c.close,sym)}</td></tr>`;
             }
             const newsCount = (currentNewsMap.get(sym) || []).length;
+            const isNasdaq = sym === "NASDAQ 100";
+            const nasdaqBadge = isNasdaq ? '<span class="nasdaq-badge">📈 NDX · Yahoo</span><span class="proxy-badge">🔀 cors.dev</span>' : '';
 
             html += `
                 <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                     <details open>
                         <summary class="px-5 py-3 bg-slate-50 cursor-pointer hover:bg-slate-100">
                             <div class="flex flex-wrap items-center justify-between gap-3">
-                                <span class="font-mono font-bold text-lg">${sym} <span class="gann-badge">🌀 GANN</span> <span class="news-badge">📰 ${newsCount}</span></span>
+                                <span class="font-mono font-bold text-lg">${sym} ${nasdaqBadge} <span class="gann-badge">🌀 GANN</span> <span class="news-badge">📰 ${newsCount}</span></span>
                                 <div class="flex gap-2 text-xs bg-white px-3 py-1 rounded-full shadow-sm flex-wrap"><span>📊 SMA50:${ma50Show}</span><span>SMA100:${ma100Show}</span><span>SMA200:${ma200Show}</span><span>RSI:${rsiShow}</span><span>MACD:${macdHist}</span><span>StochK:${stochK}</span><span>📅 Daily: ${dailyBias}</span><span>${structureBull || structureBear}</span><span class="bg-indigo-100 text-indigo-800 px-2 rounded">⛔ wknd excl</span></div>
                                 <div class="flex gap-2"><button class="copy-btn text-xs bg-slate-700 text-white px-3 py-1 rounded-full" data-symbol="${sym}">📋 CSV+News</button><button class="chart-toggle-btn text-xs bg-indigo-700 text-white px-3 py-1 rounded-full" data-wrapper="${wrapperId}" data-symbol="${sym}" data-chartbox="${chartBoxId}">📈 ICT CHART</button></div>
                                 <span class="chevron text-slate-400 text-xs">▶</span>
